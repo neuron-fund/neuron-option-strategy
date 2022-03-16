@@ -1,0 +1,38 @@
+{
+  "env": {
+    "browser": false,
+    "node": true,
+    "mocha": true,
+    "commonjs": true,
+    "es2021": true
+  },
+  "extends": "standard",
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "parserOptions": {
+    "sourceType": "module"
+  },
+  "globals": {
+    "network": "readonly",
+    "hre": "readonly",
+    "artifacts": "readonly"
+  },
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error"
+  },
+  "tabWidth": 2,
+  "useTabs": false,
+  "printWidth": 120,
+  "semi": false,
+  "singleQuote": true,
+  "arrowParens": "avoid",
+  "overrides": [
+    {
+      "files": "*.sol",
+      "options": {
+        "tabWidth": 4,
+        "singleQuote": false
+      }
+    }
+  ]
+}

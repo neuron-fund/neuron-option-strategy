@@ -7,6 +7,8 @@ import {MockNeuronPool} from "./MockNeuronPool.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
+import "hardhat/console.sol";
+
 /**
  * @notice A Pricer contract for a Yearn nToken
  */
@@ -60,7 +62,9 @@ contract MockNeuronPoolPricer {
     function setExpiryPriceInOracle(uint256 _expiryTimestamp) external {
         (uint256 underlyingPriceExpiry, ) = oracle.getExpiryPrice(address(underlying), _expiryTimestamp);
         require(underlyingPriceExpiry > 0, "MockNeuronPoolPricer: underlying price not set yet");
+        console.log("setExpiryPriceInOracle ~ underlyingPriceExpiry", underlyingPriceExpiry);
         uint256 nTokenPrice = _underlyingPriceTontokenPrice(underlyingPriceExpiry);
+        console.log("setExpiryPriceInOracle ~ nTokenPrice", nTokenPrice);
         oracle.setExpiryPrice(address(nToken), _expiryTimestamp, nTokenPrice);
     }
 

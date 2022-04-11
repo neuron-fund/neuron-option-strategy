@@ -5,11 +5,13 @@ import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Vault} from "./Vault.sol";
 import {ShareMath} from "./ShareMath.sol";
-import {IOtokenFactory, IOtoken, IController, Actions, GammaTypes, MarginVault} from "../interfaces/GammaInterface.sol";
+import {IOtokenFactory, IOtoken, IController, Actions, MarginVault} from "../interfaces/GammaInterface.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
 import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
 import {UniswapRouter} from "./UniswapRouter.sol";
+
+import "hardhat/console.sol";
 
 library CollateralVaultLifecycle {
     using SafeMath for uint256;
@@ -44,7 +46,7 @@ library CollateralVaultLifecycle {
      * @return performanceFeeInAsset is the performance fee charged by vault
      * @return totalVaultFee is the total amount of fee charged by vault
      */
-    function rollover(Vault.VaultState storage vaultState, RolloverParams calldata params)
+    function rollover(Vault.CollateralVaultState storage vaultState, RolloverParams calldata params)
         external
         view
         returns (
@@ -144,7 +146,7 @@ library CollateralVaultLifecycle {
         uint256 managementFeePercent
     )
         internal
-        pure
+        view
         returns (
             uint256 performanceFeeInAsset,
             uint256 managementFeeInAsset,
@@ -164,6 +166,8 @@ library CollateralVaultLifecycle {
         // deposits and withdrawals, is positive. If it is negative, last week's
         // option expired ITM past breakeven, and the vault took a loss so we
         // do not collect performance fee for last week
+        console.log("lastLockedAmount", lastLockedAmount);
+        console.log("lockedBalanceSansPending", lockedBalanceSansPending);
         if (lockedBalanceSansPending > lastLockedAmount) {
             _performanceFeeInAsset = performanceFeePercent > 0
                 ? lockedBalanceSansPending.sub(lastLockedAmount).mul(performanceFeePercent).div(

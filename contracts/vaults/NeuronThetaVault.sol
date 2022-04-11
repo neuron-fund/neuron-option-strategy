@@ -44,9 +44,14 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
      *  EVENTS
      ***********************************************/
 
-    event OpenShort(address indexed options, uint256[] depositAmounts, address indexed manager);
+    event OpenShort(
+        address indexed options,
+        uint256[] depositCollateralAmounts,
+        uint256 depositValue,
+        address indexed manager
+    );
 
-    event CloseShort(address indexed options, uint256 withdrawAmount, address indexed manager);
+    event CloseShort(address indexed options, uint256[] withdrawAmounts, address indexed manager);
 
     event NewOptionStrikeSelected(uint256 strikePrice, uint256 delta);
 
@@ -239,44 +244,31 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
             );
 
         emit NewOptionStrikeSelected(strikePrice, delta);
-        console.log("ShareMath.assertUint104");
         ShareMath.assertUint104(premium);
 
-        console.log("currentOtokenPremium =", uint104(premium));
         currentOtokenPremium = uint104(premium);
-        console.log("optionState.nextOption = otokenAddress;", otokenAddress);
         optionState.nextOption = otokenAddress;
 
-        console.log("nextOptionReady = ;", block.timestamp.add(DELAY));
         uint256 nextOptionReady = block.timestamp.add(DELAY);
-        console.log("require(nextOptionReady <= type(uint32).max");
         require(nextOptionReady <= type(uint32).max, "Overflow nextOptionReady");
-        console.log("optionState.nextOptionReadyAt = uint32(nextOptionReady)");
         optionState.nextOptionReadyAt = uint32(nextOptionReady);
 
-        console.log("_closeShort");
         _closeShort(oldOption);
 
-        console.log("collateralVaults =");
-        console.log("collateralAssets =");
-        console.log("asset = ");
         address asset = vaultParams.asset;
-        console.log("auctionBiddingToken = ");
         address auctionBiddingToken = auctionBiddingToken;
 
         // Swap auction premium to asset if premium is different from asset
+        // TODO neuron test this case
         if (asset != auctionBiddingToken) {
-            console.log("VaultLifecycle.swap(auctionBiddingToken ");
             VaultLifecycle.swap(auctionBiddingToken, 0, DEX_ROUTER, auctionPremiumSwapPath);
         }
 
         // Premium
         uint256 assetBalance = IERC20(asset).balanceOf(address(this));
-        console.log("assetBalance =", assetBalance);
+        console.log("commitAndClose ~ asset", asset);
         uint256 roundLockedAmount = vaultState.lastLockedAmount;
-        console.log("roundLockedAmount =", roundLockedAmount);
         uint256 currentRound = vaultState.round;
-        console.log("currentRound =", currentRound);
         address[] memory collateralVaults = vaultParams.collateralVaults;
         address[] memory collateralAssets = vaultParams.collateralAssets;
 
@@ -284,19 +276,35 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
             // Share of collateral vault is calculated as:
             // (premium) * collateralVaultProvidedValue / totalLockedValueForRound
             // TODO neuron check this calculation does not have rounding errors
-            console.log("collateralVaultPremiumShatre sart");
             uint256 collateralVaultPremiumShare =
                 roundLockedAmount == 0
                     ? 0
                     : (assetBalance * roundCollateralsValues[currentRound][i]) / roundLockedAmount;
-            console.log("collateralVaultPremiumShare =", collateralVaultPremiumShare);
 
+            console.log("commitAndClose ~ assetBalance", assetBalance);
+            console.log(
+                "commitAndClose ~ roundCollateralsValues[currentRound][i]",
+                roundLockedAmount == 0 ? 0 : roundCollateralsValues[currentRound][i]
+            );
+            console.log("commitAndClose ~ roundLockedAmount", roundLockedAmount);
+            console.log("commitAndClose ~ collateralVaultPremiumShare", collateralVaultPremiumShare);
             uint256 collateralAssetBalance = IERC20(collateralAssets[i]).balanceOf(address(this));
-            console.log("collateralAssetBalance =", collateralAssetBalance);
-            console.log("transferAsset asset");
+            console.log("commitAndClose ~ collateralAssetBalance", collateralAssetBalance);
+            console.log(
+                "commitAndClose ~  IERC20(asset).balanceOf(collateralVaults[i])",
+                IERC20(asset).balanceOf(collateralVaults[i])
+            );
             NeuronPoolUtils.transferAsset(WETH, asset, collateralVaults[i], collateralVaultPremiumShare);
-            console.log("transferAsset collateralAssets[i]");
             NeuronPoolUtils.transferAsset(WETH, collateralAssets[i], collateralVaults[i], collateralAssetBalance);
+            console.log(
+                "commitAndClose ~  IERC20(asset).balanceOf(collateralVaults[i])",
+                IERC20(asset).balanceOf(collateralVaults[i])
+            );
+            INeuronCollateralVault(collateralVaults[i]).commitAndClose();
+            console.log(
+                "commitAndClose ~  IERC20(asset).balanceOf(collateralVaults[i])",
+                IERC20(asset).balanceOf(collateralVaults[i])
+            );
         }
     }
 
@@ -305,7 +313,7 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
      */
     function _closeShort(address oldOption) private {
         uint256 lockedAmount = vaultState.lockedAmount;
-        if (oldOption != address(0)) {
+        if (oldOption != address(0) && vaultState.lastLockedAmount == 0) {
             vaultState.lastLockedAmount = uint104(lockedAmount);
         }
         vaultState.lockedAmount = 0;
@@ -313,8 +321,8 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
         optionState.currentOption = address(0);
 
         if (oldOption != address(0)) {
-            uint256 withdrawAmount = VaultLifecycle.settleShort(GAMMA_CONTROLLER);
-            emit CloseShort(oldOption, withdrawAmount, msg.sender);
+            uint256[] memory withdrawnAmounts = VaultLifecycle.settleShort(vaultParams, GAMMA_CONTROLLER);
+            emit CloseShort(oldOption, withdrawnAmounts, msg.sender);
         }
     }
 
@@ -322,11 +330,10 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
      * @notice Rolls the vault's funds into a new short position.
      */
     function rollToNextOption() external onlyKeeper nonReentrant {
-        (address newOption, uint256[] memory lockedAmounts) = _rollToNextOption();
-
-        emit OpenShort(newOption, lockedAmounts, msg.sender);
-
-        VaultLifecycle.createShort(GAMMA_CONTROLLER, MARGIN_POOL, newOption, lockedAmounts);
+        (address newOption, uint256[] memory lockedCollateralAmounts, uint256 lockedAmountValue) = _rollToNextOption();
+        console.log("lockedAmountValue", lockedAmountValue);
+        emit OpenShort(newOption, lockedCollateralAmounts, lockedAmountValue, msg.sender);
+        VaultLifecycle.createShort(GAMMA_CONTROLLER, MARGIN_POOL, newOption, lockedCollateralAmounts);
 
         _startAuction();
     }
@@ -355,6 +362,10 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
         optionAuctionID = VaultLifecycle.startAuction(auctionDetails);
     }
 
+    function getCollateralAssets() external view returns (address[] memory) {
+        return vaultParams.collateralAssets;
+    }
+
     /**
      * @notice Burn the remaining oTokens left over from gnosis auction.
      */
@@ -366,7 +377,6 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
         uint256 unlockedAssetAmount;
         for (uint256 i = 0; i < collateralVaults.length; i++) {
             INeuronPool collateral = INeuronPool(collateralAssets[i]);
-
             uint256 amountInAsset =
                 DSMath.wdiv(
                     unlockedCollateralAssetsAmounts[i],
@@ -379,6 +389,11 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
                 collateralVaults[i],
                 unlockedCollateralAssetsAmounts[i]
             );
+        }
+        if (unlockedAssetAmount != 0) {
+            uint104 lockedAmount = vaultState.lockedAmount;
+            vaultState.lastLockedAmount = lockedAmount;
+            vaultState.lockedAmount = lockedAmount - uint104(unlockedAssetAmount);
         }
     }
 }

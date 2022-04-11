@@ -1,21 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.4;
 
-library GammaTypes {
-    // vault is a struct of 6 arrays that describe a position a user has, a user can have multiple vaults.
-    struct Vault {
-        address shortOtoken;
-        address[] longOtokens;
-        address[] collateralAssets;
-        uint256 shortAmount;
-        uint256[] longAmounts;
-        uint256[] collateralAmounts;
-        uint256[] usedCollateralAmounts;
-        uint256[] usedCollateralValues;
-        uint256[] unusedCollateralAmounts;
-    }
-}
-
 interface IOtoken {
     event Approval(address indexed owner, address indexed spender, uint256 value);
     event Transfer(address indexed from, address indexed to, uint256 value);
@@ -329,19 +314,30 @@ interface IController {
         );
 
     function whitelist() external view returns (address);
+
+    function getAccountVaultCounter(address _accountOwner) external view returns (uint256);
 }
 
 interface MarginVault {
     struct Vault {
         address shortOtoken;
-        address[] longOtokens;
+        // addresses of oTokens a user has shorted (i.e. written) against this vault
+        // addresses of oTokens a user has bought and deposited in this vault
+        // user can be long oTokens without opening a vault (e.g. by buying on a DEX)
+        address longOtoken;
+        // addresses of other ERC-20s a user has deposited as collateral in this vault
         address[] collateralAssets;
+        // quantity of oTokens minted/written for each oToken address in oTokenAddress
         uint256 shortAmount;
-        uint256[] longAmounts;
+        // quantity of oTokens owned and held in the vault for each oToken address in longOtokens
+        uint256 longAmount;
+        uint256 usedLongAmount;
+        // quantity of ERC-20 deposited as collateral in the vault for each ERC-20 address in collateralAssets
         uint256[] collateralAmounts;
-        uint256[] usedCollateralAmounts;
+        // Collateral which is currently used for minting oTokens and can't be used until expiry
+        uint256[] reservedCollateralAmounts;
         uint256[] usedCollateralValues;
-        uint256[] unusedCollateralAmounts;
+        uint256[] availableCollateralAmounts;
     }
 }
 

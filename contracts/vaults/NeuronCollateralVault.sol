@@ -42,10 +42,7 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
     Vault.CollateralVaultParams public vaultParams;
 
     /// @notice Vault's lifecycle state like round and locked amounts
-    Vault.VaultState public vaultState;
-
-    /// @notice Vault's state of the options sold and the timelocked option
-    Vault.OptionState public optionState;
+    Vault.CollateralVaultState public vaultState;
 
     /// @notice Fee recipient for the performance and management fees
     address public feeRecipient;
@@ -81,9 +78,6 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
 
     /// @notice USDC 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
     address public immutable USDC;
-
-    /// @notice 15 minute timelock between commitAndClose and rollToNexOption.
-    uint256 public constant DELAY = 0;
 
     /// @notice Withdrawal buffer for yearn vault
     uint256 public constant COLLATERAL_WITHDRAWAL_BUFFER = 5; // 0.05%
@@ -322,6 +316,7 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      * @param creditor is the address to receieve the deposit
      */
     function _depositFor(uint256 amount, address creditor) private {
+        console.log("_depositFor ~ _depositFor");
         uint256 currentRound = vaultState.round;
         uint256 totalWithDepositedAmount = totalBalance().add(amount);
         console.log("amount", amount);
@@ -370,6 +365,11 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
 
         // We do a max redeem before initiating a withdrawal
         // But we check if they must first have unredeemed shares
+        console.log("initiateWithdraw ~ depositReceipts[msg.sender].amount", depositReceipts[msg.sender].amount);
+        console.log(
+            "initiateWithdraw ~ depositReceipts[msg.sender].unredeemedShares",
+            depositReceipts[msg.sender].unredeemedShares
+        );
         if (depositReceipts[msg.sender].amount > 0 || depositReceipts[msg.sender].unredeemedShares > 0) {
             _redeem(0, true);
         }
@@ -394,8 +394,17 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
         uint256 newQueuedWithdrawShares = uint256(vaultState.queuedWithdrawShares).add(numShares);
         ShareMath.assertUint128(newQueuedWithdrawShares);
         vaultState.queuedWithdrawShares = uint128(newQueuedWithdrawShares);
-
+        console.log("BEFORE SHARE TRANSFER");
         _transfer(msg.sender, address(this), numShares);
+    }
+
+    /**
+     * @notice Redeems shares that are owed to the account
+     * @param numShares is the number of shares to redeem
+     */
+    function redeem(uint256 numShares) external nonReentrant {
+        require(numShares > 0, "!numShares");
+        _redeem(numShares, false);
     }
 
     /**
@@ -411,6 +420,7 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      * @param isMax is flag for when callers do a max redemption
      */
     function _redeem(uint256 numShares, bool isMax) internal {
+        console.log("_redeem ~ numShares", numShares);
         Vault.DepositReceipt memory depositReceipt = depositReceipts[msg.sender];
 
         // This handles the null case when depositReceipt.round = 0
@@ -424,8 +434,10 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
                 vaultParams.decimals
             );
 
+        console.log("_redeem ~ unredeemedShares", unredeemedShares);
         numShares = isMax ? unredeemedShares : numShares;
         if (numShares == 0) {
+            console.log("_redeem ~ numShares == 0", numShares == 0);
             return;
         }
         require(numShares <= unredeemedShares, "Exceeds available");
@@ -442,7 +454,8 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
         depositReceipts[msg.sender].unredeemedShares = uint128(unredeemedShares.sub(numShares));
 
         emit Redeem(msg.sender, numShares, depositReceipt.round);
-
+        console.log("BEFORE REDEEM TRASNFER");
+        console.log("_redeem ~ numShares", numShares);
         _transfer(address(this), msg.sender, numShares);
     }
 
@@ -471,12 +484,14 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
 
         emit InstantWithdraw(msg.sender, amount, currentRound);
 
+        console.log("withdrawInstantly ~ unwrapYieldToken BEFORE");
         NeuronPoolUtils.unwrapYieldToken(
             amount,
             vaultParams.asset,
             address(collateralToken),
             COLLATERAL_WITHDRAWAL_BUFFER
         );
+        console.log("withdrawInstantly ~ unwrapYieldToken AFTER");
         NeuronPoolUtils.transferAsset(WETH, vaultParams.asset, msg.sender, amount);
     }
 
@@ -548,8 +563,10 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
     /**
      * @notice Rolls the vault's funds into a new short position.
      */
-    function rollToNextOption() external onlyKeeper nonReentrant returns (uint256) {
+    function rollToNextOption() external onlyKeeper nonReentrant returns (uint256, uint256) {
+        console.log("rollToNextOption ~ before _rollToNextOption", collateralToken.balanceOf(address(this)));
         uint256 queuedWithdrawAmount = _rollToNextOption(uint256(lastQueuedWithdrawAmount));
+        console.log("rollToNextOption ~ after _rollToNextOption", collateralToken.balanceOf(address(this)));
 
         lastQueuedWithdrawAmount = queuedWithdrawAmount;
 
@@ -563,19 +580,32 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
         // We are subtracting `collateralAsset` balance by queuedWithdrawAmount denominated in `collateralAsset` plus
         // a buffer for withdrawals taking into account slippage from yearn vault
 
-        uint256 lockedBalance =
+        uint256 collateralPricePerShare = collateralToken.pricePerShare();
+
+        console.log(
+            "rollToNextOption ~ collateralToken.balanceOf(address(this))",
+            collateralToken.balanceOf(address(this))
+        );
+        uint256 lockedBalanceInCollateralToken =
             collateralToken.balanceOf(address(this)).sub(
                 DSMath.wdiv(
                     queuedWithdrawAmount.add(queuedWithdrawAmount.mul(COLLATERAL_WITHDRAWAL_BUFFER).div(10000)),
-                    collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
+                    collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
                 )
             );
 
-        collateralToken.transfer(msg.sender, lockedBalance);
+        console.log("rollToNextOption ~ lockedBalanceInCollateralToken", lockedBalanceInCollateralToken);
+        uint256 lockedBalanceInAsset =
+            DSMath.wmul(
+                lockedBalanceInCollateralToken,
+                collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
+            );
 
-        emit OpenShort(lockedBalance, msg.sender);
+        collateralToken.transfer(msg.sender, lockedBalanceInCollateralToken);
 
-        return (lockedBalance);
+        emit OpenShort(lockedBalanceInCollateralToken, msg.sender);
+
+        return (lockedBalanceInCollateralToken, lockedBalanceInAsset);
     }
 
     /*
@@ -586,8 +616,6 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      * @return queuedWithdrawAmount is the queued amount for withdrawal
      */
     function _rollToNextOption(uint256 _lastQueuedWithdrawAmount) internal returns (uint256) {
-        require(block.timestamp >= optionState.nextOptionReadyAt, "!ready");
-
         (
             uint256 lockedBalance,
             uint256 queuedWithdrawAmount,
@@ -622,7 +650,6 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
         vaultState.lockedAmount = uint104(lockedBalance);
 
         _mint(address(this), mintShares);
-
         // Wrap entire `asset` balance to `collateralToken` balance
         NeuronPoolUtils.wrapToYieldToken(vaultParams.asset, vaultParams.collateralAsset);
 
@@ -637,6 +664,16 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
         }
 
         return (queuedWithdrawAmount);
+    }
+
+    /**
+     * @notice Sets the next option the vault will be shorting, and closes the existing short.
+     *         This allows all the users to withdraw if the next option is malicious.
+     */
+    function commitAndClose() external onlyKeeper nonReentrant {
+        uint256 lockedAmount = vaultState.lockedAmount;
+        vaultState.lastLockedAmount = uint104(lockedAmount);
+        vaultState.lockedAmount = 0;
     }
 
     /************************************************
@@ -722,18 +759,6 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
 
     function cap() external view returns (uint256) {
         return vaultParams.cap;
-    }
-
-    function nextOptionReadyAt() external view returns (uint256) {
-        return optionState.nextOptionReadyAt;
-    }
-
-    function currentOption() external view returns (address) {
-        return optionState.currentOption;
-    }
-
-    function nextOption() external view returns (address) {
-        return optionState.nextOption;
     }
 
     function totalPending() external view returns (uint256) {

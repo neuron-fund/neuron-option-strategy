@@ -10,6 +10,8 @@ import {IWETH} from "../interfaces/IWETH.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
 
+import "hardhat/console.sol";
+
 library NeuronPoolUtils {
     using SafeMath for uint256;
     using SupportsNonCompliantERC20 for IERC20;
@@ -125,6 +127,7 @@ library NeuronPoolUtils {
         if (amountToUnwrap > 0) {
             amountToUnwrap = amountToUnwrap.add(amountToUnwrap.mul(yearnWithdrawalBuffer).div(10000)).sub(1);
 
+            console.log("amountToUnwrap", amountToUnwrap);
             collateral.withdraw(amountToUnwrap);
         }
     }
@@ -165,12 +168,13 @@ library NeuronPoolUtils {
         if (amount == 0) {
             return;
         }
-        if (asset == weth) {
-            IWETH(weth).withdraw(amount);
-            (bool success, ) = payable(recipient).call{value: amount}("");
-            require(success, "!success");
-            return;
-        }
+        // TODO neuron why transfer as ETH isntead of WETH?
+        // if (asset == weth) {
+        //     IWETH(weth).withdraw(amount);
+        //     (bool success, ) = payable(recipient).call{value: amount}("");
+        //     require(success, "!success");
+        //     return;
+        // }
         IERC20(asset).safeTransfer(recipient, amount);
     }
 

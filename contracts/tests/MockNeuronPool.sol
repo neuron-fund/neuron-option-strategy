@@ -9,7 +9,6 @@ import "hardhat/console.sol";
 contract MockNeuronPool is ERC20 {
     address public asset;
     uint256 public balance;
-    mapping(address => uint256) public userShares;
 
     constructor(address _asset) ERC20("MockNeuronPool", "MNP") {
         asset = _asset;
@@ -27,6 +26,7 @@ contract MockNeuronPool is ERC20 {
         balance += _amount;
         console.log("balance AFTER", balance);
         IERC20(asset).transferFrom(msg.sender, address(this), _amount);
+        console.log("deposit ~ asset", asset);
         uint256 shares;
         uint256 totalSupply = totalSupply();
         console.log("totalSupply", totalSupply);
@@ -36,16 +36,16 @@ contract MockNeuronPool is ERC20 {
         } else {
             shares = (_amount * totalSupply) / balanceBefore;
         }
-        userShares[msg.sender] += shares;
         console.log("shares", shares);
         _mint(msg.sender, shares);
     }
 
     function withdraw(uint256 _shares) external {
-        require(_shares <= userShares[msg.sender]);
-        uint256 amount = _shares * pricePerShare();
-        userShares[msg.sender] -= _shares;
+        uint256 amount = (_shares * pricePerShare()) / (10**decimals());
+        console.log("withdraw ~ amount", amount);
         balance -= amount;
         _burn(msg.sender, _shares);
+        IERC20(asset).transfer(msg.sender, amount);
+        console.log("withdraw ~ asset", asset);
     }
 }

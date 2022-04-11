@@ -7,7 +7,7 @@ import {Vault} from "./Vault.sol";
 import {ShareMath} from "./ShareMath.sol";
 import {IStrikeSelection} from "../interfaces/INeuron.sol";
 import {GnosisAuction} from "./GnosisAuction.sol";
-import {IOtokenFactory, IOtoken, IController, Actions, GammaTypes, MarginVault} from "../interfaces/GammaInterface.sol";
+import {IOtokenFactory, IOtoken, IController, Actions, MarginVault} from "../interfaces/GammaInterface.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
 import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
@@ -175,6 +175,7 @@ library VaultLifecycle {
             // double approve to fix non-compliant ERC20s
             IERC20 collateralToken = IERC20(collateralAssets[i]);
             collateralToken.safeApproveNonCompliant(marginPool, depositAmounts[i]);
+            console.log(")externalreturns ~ depositAmounts[i]", depositAmounts[i]);
         }
 
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](3);
@@ -215,6 +216,7 @@ library VaultLifecycle {
         controller.operate(actions);
 
         uint256 mintedAmount = oToken.balanceOf(address(this));
+        console.log(")externalreturns ~ mintedAmount", mintedAmount);
 
         return mintedAmount;
     }
@@ -227,7 +229,10 @@ library VaultLifecycle {
      * @param gammaController is the address of the opyn controller contract
      * @return amount of collateral redeemed from the vault
      */
-    function settleShort(address gammaController) external returns (uint256) {
+    function settleShort(Vault.VaultParams storage vaultParams, address gammaController)
+        external
+        returns (uint256[] memory)
+    {
         IController controller = IController(gammaController);
 
         // gets the currently active vault ID
@@ -237,18 +242,8 @@ library VaultLifecycle {
 
         require(vault.shortOtoken != address(0), "No short");
 
-        // An otoken's collateralAsset is the vault's `asset`
-        // So in the context of performing Opyn short operations we call them collateralAsset
-        IERC20 collateralToken = IERC20(vault.collateralAssets[0]);
-
-        // The short position has been previously closed, or all the otokens have been burned.
-        // So we return early.
-        if (address(collateralToken) == address(0)) {
-            return 0;
-        }
-
         // This is equivalent to doing IERC20(vault.asset).balanceOf(address(this))
-        uint256 startCollateralBalance = collateralToken.balanceOf(address(this));
+        uint256[] memory startCollateralBalances = getCollateralBalances(vaultParams);
 
         // If it is after expiry, we need to settle the short position using the normal way
         // Delete the vault and withdraw all remaining collateral from the vault
@@ -266,9 +261,9 @@ library VaultLifecycle {
 
         controller.operate(actions);
 
-        uint256 endCollateralBalance = collateralToken.balanceOf(address(this));
+        uint256[] memory endCollateralBalances = getCollateralBalances(vaultParams);
 
-        return endCollateralBalance.sub(startCollateralBalance);
+        return getArrayOfDiffs(endCollateralBalances, startCollateralBalances);
     }
 
     /**
@@ -330,30 +325,37 @@ library VaultLifecycle {
         address currentOption
     ) external returns (uint256[] memory) {
         uint256 numOTokensToBurn = IERC20(currentOption).balanceOf(address(this));
-
+        console.log("burnOtokens ~ numOTokensToBurn", numOTokensToBurn);
         require(numOTokensToBurn > 0, "No oTokens to burn");
 
         IController controller = IController(gammaController);
 
         // gets the currently active vault ID
         uint256 vaultID = controller.accountVaultCounter(address(this));
+        console.log(")externalreturns ~ vaultID", vaultID);
 
-        MarginVault.Vault memory vault = controller.getVault(address(this), vaultID);
+        MarginVault.Vault memory gammaVault = controller.getVault(address(this), vaultID);
+        console.log(")externalreturns ~ gammaVault shortOtoken", gammaVault.shortOtoken);
 
-        require(vault.shortOtoken != address(0), "No short");
+        require(gammaVault.shortOtoken != address(0), "No short");
+        console.log(")externalreturns ~ gammaVault.shortOtoken", gammaVault.shortOtoken);
 
         uint256[] memory startCollateralBalances = getCollateralBalances(vaultParams);
-
+        console.log(")externalreturns ~ startCollateralBalances", startCollateralBalances[0]);
         // Burning `amount` of oTokens from the neuron vault,
         // then withdrawing the corresponding collateral amount from the vault
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](2);
 
         // TODO use array initialization like these everywhere
-        address[] memory shortOtokenAddressActionArg;
-        shortOtokenAddressActionArg[0] = vault.shortOtoken;
+        console.log(")externalreturns ~ shortOtokenAddressActionArg");
+        address[] memory shortOtokenAddressActionArg = new address[](1);
+        console.log(")externalreturns ~ shortOtokenAddressActionArg", shortOtokenAddressActionArg[0]);
+        shortOtokenAddressActionArg[0] = gammaVault.shortOtoken;
+        console.log(")externalreturns ~ shortOtokenAddressActionArg[0] ", shortOtokenAddressActionArg[0]);
 
-        uint256[] memory burnAmountActionArg;
+        uint256[] memory burnAmountActionArg = new uint256[](1);
         burnAmountActionArg[0] = numOTokensToBurn;
+        console.log(")externalreturns ~ burnAmountActionArg[0]", burnAmountActionArg[0]);
 
         actions[0] = Actions.ActionArgs({
             actionType: uint8(Actions.ActionType.BurnShortOption),
@@ -378,24 +380,32 @@ library VaultLifecycle {
         controller.operate(actions);
 
         uint256[] memory endCollateralBalances = getCollateralBalances(vaultParams);
+        console.log(")externalreturns ~ endCollateralBalances", endCollateralBalances[0]);
 
-        return getArrayOfDiffs(startCollateralBalances, endCollateralBalances);
+        return getArrayOfDiffs(endCollateralBalances, startCollateralBalances);
     }
 
     function getCollateralBalances(Vault.VaultParams storage vaultParams) internal view returns (uint256[] memory) {
         address[] memory collateralAssets = vaultParams.collateralAssets;
         uint256 collateralsLength = collateralAssets.length;
+        console.log("getCollateralBalances ~ collateralsLength", collateralsLength);
         uint256[] memory collateralBalances = new uint256[](collateralsLength);
         for (uint256 i = 0; i < collateralsLength; i++) {
+            console.log("getCollateralBalances ~ collateralAssets[i]", collateralAssets[i]);
             collateralBalances[i] = IERC20(collateralAssets[i]).balanceOf(address(this));
+            console.log("getCollateralBalances ~ collateralBalances[i]", collateralBalances[i]);
         }
         return collateralBalances;
     }
 
-    function getArrayOfDiffs(uint256[] memory a, uint256[] memory b) internal pure returns (uint256[] memory) {
+    function getArrayOfDiffs(uint256[] memory a, uint256[] memory b) internal view returns (uint256[] memory) {
         require(a.length == b.length, "Arrays must be of equal length");
         uint256[] memory diffs = new uint256[](a.length);
+        console.log("getArrayOfDiffs ~ a.length", a.length);
         for (uint256 i = 0; i < a.length; i++) {
+            console.log("getArrayOfDiffs ~ b[i]", b[i]);
+            console.log("getArrayOfDiffs ~ a[i]", a[i]);
+            console.log("getArrayOfDiffs ~ a[i].sub(b[i])", a[i].sub(b[i]));
             diffs[i] = a[i].sub(b[i]);
         }
         return diffs;

@@ -50,7 +50,6 @@ library Vault {
         // Underlying asset of the options sold by vault
         address underlying;
         // Addresses of collateral vaults for collateral assets
-        // TODO neuron isnt it the same as collateralAssets?
         address[] collateralVaults;
     }
 
@@ -72,7 +71,7 @@ library Vault {
         uint32 nextOptionReadyAt;
     }
 
-    struct VaultState {
+    struct CollateralVaultState {
         // 32 byte slot 1
         //  Current round number. `round` represents the number of `period`s elapsed.
         uint16 round;
@@ -87,6 +86,17 @@ library Vault {
         uint128 totalPending;
         // Amount locked for scheduled withdrawals;
         uint128 queuedWithdrawShares;
+    }
+
+    struct VaultState {
+        // 32 byte slot 1
+        //  Current round number. `round` represents the number of `period`s elapsed.
+        uint16 round;
+        // Amount that is currently locked for selling options
+        uint104 lockedAmount;
+        // Amount that was locked for selling options in the previous round
+        // used for calculating performance fee deduction
+        uint104 lastLockedAmount;
     }
 
     struct DepositReceipt {

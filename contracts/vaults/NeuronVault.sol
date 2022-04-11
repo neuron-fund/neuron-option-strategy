@@ -15,6 +15,7 @@ import {VaultLifecycle} from "../libraries/VaultLifecycle.sol";
 import {ShareMath} from "../libraries/ShareMath.sol";
 import {IWETH} from "../interfaces/IWETH.sol";
 import {INeuronCollateralVault} from "../interfaces/INeuronCollateralVault.sol";
+import "hardhat/console.sol";
 
 contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     using SafeERC20 for IERC20;
@@ -253,7 +254,14 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
      * @return newOption is the new option address
      * @return queuedWithdrawAmount is the queued amount for withdrawal
      */
-    function _rollToNextOption() internal returns (address, uint256[] memory) {
+    function _rollToNextOption()
+        internal
+        returns (
+            address,
+            uint256[] memory,
+            uint256
+        )
+    {
         require(block.timestamp >= optionState.nextOptionReadyAt, "!ready");
 
         address newOption = optionState.nextOption;
@@ -269,15 +277,22 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
 
         address[] memory collateralVaults = vaultParams.collateralVaults;
 
-        uint256[] memory lockedAmounts = new uint256[](collateralVaults.length);
-
+        // Collaterals amounts denominated in asset
+        uint256[] memory lockedCollateralsValues = new uint256[](collateralVaults.length);
+        uint256[] memory lockedCollateralsAmounts = new uint256[](collateralVaults.length);
+        uint256 totalLockedCollateralValue;
         // Execute rollToNextOption in collateral vaults first to receive collaterals
         for (uint256 i = 0; i < collateralVaults.length; i++) {
-            lockedAmounts[i] = INeuronCollateralVault(collateralVaults[i]).rollToNextOption();
+            (lockedCollateralsAmounts[i], lockedCollateralsValues[i]) = INeuronCollateralVault(collateralVaults[i])
+                .rollToNextOption();
+            console.log("lockedCollateralsValues[i])", lockedCollateralsValues[i]);
+            console.log("lockedCollateralsAmounts[i]", lockedCollateralsAmounts[i]);
+            totalLockedCollateralValue = totalLockedCollateralValue.add(lockedCollateralsValues[i]);
         }
 
-        roundCollateralsValues[nextRound] = lockedAmounts;
-        return (newOption, lockedAmounts);
+        roundCollateralsValues[nextRound] = lockedCollateralsValues;
+        vaultState.lockedAmount = uint104(totalLockedCollateralValue);
+        return (newOption, lockedCollateralsAmounts, totalLockedCollateralValue);
     }
 
     /************************************************
@@ -314,9 +329,5 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
 
     function nextOption() external view returns (address) {
         return optionState.nextOption;
-    }
-
-    function totalPending() external view returns (uint256) {
-        return vaultState.totalPending;
     }
 }

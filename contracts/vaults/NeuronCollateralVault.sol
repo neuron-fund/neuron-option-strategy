@@ -287,26 +287,31 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      */
     function depositYieldToken(uint256 amount) external nonReentrant {
         require(amount > 0, "!amount");
-        console.log("depositYieldToken amount", amount);
         uint256 amountInAsset =
             DSMath.wmul(
                 amount,
                 collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
             );
-        console.log(
-            "amountInAsset simple",
-            amount * collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
-        );
-        console.log(
-            "depositYieldToken NeuronPoolUtils.decimalShift(address(collateralToken))",
-            NeuronPoolUtils.decimalShift(address(collateralToken))
-        );
-        console.log("depositYieldToken collateralToken.pricePerShare()", collateralToken.pricePerShare());
-        console.log("depositYieldToken amountInAsset", amountInAsset);
 
         _depositFor(amountInAsset, msg.sender);
-        console.log("collateralToken", address(collateralToken));
-        console.log("amount", amount);
+        IERC20(address(collateralToken)).safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+    /**
+     * @notice Deposits the `collateralToken` into the contract and mint vault shares.
+     * @param amount is the amount of `collateralToken` to deposit
+     */
+    function depositYieldTokenFor(uint256 amount, address creditor) external nonReentrant {
+        require(amount > 0, "!amount");
+        require(creditor != address(0), "!creditor");
+
+        uint256 amountInAsset =
+            DSMath.wmul(
+                amount,
+                collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
+            );
+
+        _depositFor(amountInAsset, creditor);
         IERC20(address(collateralToken)).safeTransferFrom(msg.sender, address(this), amount);
     }
 

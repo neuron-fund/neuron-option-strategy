@@ -1,39 +1,38 @@
-import { task } from 'hardhat/config'
+import 'dotenv/config'
+import '@typechain/hardhat'
 import '@nomiclabs/hardhat-waffle'
 import 'hardhat-contract-sizer'
 import 'hardhat-log-remover'
 import 'hardhat-deploy'
+import 'hardhat-deploy-ethers'
 import '@nomiclabs/hardhat-ethers'
 import '@nomiclabs/hardhat-etherscan'
 import 'solidity-coverage'
-import exportDeployments from './scripts/tasks/exportDeployments'
-import verifyContracts from './scripts/tasks/verifyContracts'
-import { BLOCK_NUMBER } from './constants/constants'
-import { TEST_URI } from './scripts/helpers/getDefaultEthersProvider'
-
-require('dotenv').config()
+import { getDeploymentsDirFromEnv } from './helpers/importLocalNeuronDeployments'
+import { HardhatUserConfig } from 'hardhat/types'
 
 process.env.TEST_MNEMONIC = 'test test test test test test test test test test test junk'
 
 // Defaults to CHAINID=1 so things will run with mainnet fork if not specified
 const CHAINID = process.env.CHAINID ? Number(process.env.CHAINID) : 1
 
-export default {
-  accounts: {
-    mnemonic: process.env.TEST_MNEMONIC,
-  },
+const config: HardhatUserConfig = {
   paths: {
-    deploy: 'scripts/deploy',
+    deploy: ['scripts/deploy'],
     deployments: 'deployments',
   },
   solidity: {
-    version: '0.8.4',
-    settings: {
-      optimizer: {
-        runs: 200,
-        enabled: true,
+    compilers: [
+      {
+        version: '0.8.9',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
       },
-    },
+    ],
   },
   networks: {
     hardhat: {
@@ -41,55 +40,7 @@ export default {
         mnemonic: process.env.TEST_MNEMONIC,
       },
       chainId: CHAINID,
-      forking: {
-        url: TEST_URI[CHAINID],
-        // blockNumber: BLOCK_NUMBER[CHAINID],
-        gasLimit: 8e6,
-      },
     },
-    // mainnet: {
-    //   url: process.env.TEST_URI,
-    //   chainId: CHAINID,
-    //   accounts: {
-    //     mnemonic: process.env.MAINNET_MNEMONIC,
-    //   },
-    // },
-    // kovan: {
-    //   url: process.env.KOVAN_URI,
-    //   chainId: 42,
-    //   accounts: {
-    //     mnemonic: process.env.KOVAN_MNEMONIC,
-    //   },
-    // },
-    // avax: {
-    //   url: process.env.AVAX_URI,
-    //   chainId: 43114,
-    //   accounts: {
-    //     mnemonic: process.env.AVAX_MNEMONIC,
-    //   },
-    // },
-    // fuji: {
-    //   url: process.env.FUJI_URI,
-    //   chainId: 43113,
-    //   accounts: {
-    //     mnemonic: process.env.FUJI_MNEMONIC,
-    //   },
-    // },
-    // aurora: {
-    //   url: process.env.AURORA_URI,
-    //   chainId: 1313161554,
-    //   gasPrice: 0,
-    //   accounts: {
-    //     mnemonic: process.env.AURORA_MNEMONIC,
-    //   },
-    // },
-    // "aurora-testnet": {
-    //   url: process.env.AURORA_TESTNET_URI,
-    //   chainId: 1313161555,
-    //   accounts: {
-    //     mnemonic: process.env.AURORA_TESTNET_MNEMONIC,
-    //   },
-    // },
   },
   namedAccounts: {
     deployer: {
@@ -141,10 +92,11 @@ export default {
   mocha: {
     timeout: 5000000,
   },
-  // etherscan: {
-  //   apiKey: process.env.ETHERSCAN_API_KEY,
-  // },
+  external: {
+    deployments: {
+      hardhat: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH'), getDeploymentsDirFromEnv('NEURON_CONTRACTS_PATH')],
+      localhost: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH'), getDeploymentsDirFromEnv('NEURON_CONTRACTS_PATH')],
+    },
+  },
 }
-
-task('export-deployments', 'Exports deployments into JSON', exportDeployments)
-task('verify-contracts', 'Verify solidity source', verifyContracts)
+export default config

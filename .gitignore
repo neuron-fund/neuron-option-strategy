@@ -10,3 +10,4 @@ coverage/
 .DS_Store
 bin
 deployments
+typechain-types

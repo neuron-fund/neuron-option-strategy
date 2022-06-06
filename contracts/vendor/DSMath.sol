@@ -17,8 +17,6 @@
 
 pragma solidity >0.4.13;
 
-import "hardhat/console.sol";
-
 library DSMath {
     function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
         require((z = x + y) >= x, "ds-math-add-overflow");
@@ -52,14 +50,7 @@ library DSMath {
     uint256 constant RAY = 10**27;
 
     //rounds to zero if x*y < WAD / 2
-    function wmul(uint256 x, uint256 y) internal view returns (uint256 z) {
-        console.log("x", x);
-        console.log("y", y);
-        console.log("WAD", WAD);
-        console.log("mul(x, y)", mul(x, y));
-        console.log("add(mul(x, y), WAD / 2)", add(mul(x, y), WAD / 2));
-        console.log("add(mul(x, y), WAD / 2) / WAD", add(mul(x, y), WAD / 2) / WAD);
-
+    function wmul(uint256 x, uint256 y) internal pure returns (uint256 z) {
         z = add(mul(x, y), WAD / 2) / WAD;
     }
 

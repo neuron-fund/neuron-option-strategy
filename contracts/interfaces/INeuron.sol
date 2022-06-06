@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 interface IStrikeSelection {
-    function getStrikePrice(uint256 expiryTimestamp, bool isPut)
-        external
-        view
-        returns (uint256, uint256);
+    function getStrikePrice(uint256 expiryTimestamp, bool isPut) external view returns (uint256, uint256);
 
     function delta() external view returns (uint256);
 }

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {DSMath} from "../vendor/DSMath.sol";
 import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
-import {IOtoken} from "../interfaces/GammaInterface.sol";
+import {IONtoken, IOracle} from "../interfaces/GammaInterface.sol";
 import {IOptionsPremiumPricer} from "../interfaces/INeuron.sol";
 import {Vault} from "./Vault.sol";
 import {INeuronThetaVault} from "../interfaces/INeuronThetaVault.sol";
@@ -15,7 +15,7 @@ import "hardhat/console.sol";
 
 library GnosisAuction {
     using SafeMath for uint256;
-    using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20Detailed;
 
     event InitiateGnosisAuction(
         address indexed auctioningToken,
@@ -33,16 +33,16 @@ library GnosisAuction {
     );
 
     struct AuctionDetails {
-        address oTokenAddress;
+        address onTokenAddress;
         address gnosisEasyAuction;
         address asset;
         uint256 assetDecimals;
-        uint256 oTokenPremium;
+        uint256 onTokenPremium;
         uint256 duration;
     }
 
     struct BidDetails {
-        address oTokenAddress;
+        address onTokenAddress;
         address gnosisEasyAuction;
         address asset;
         uint256 assetDecimals;
@@ -54,38 +54,38 @@ library GnosisAuction {
     }
 
     function startAuction(AuctionDetails calldata auctionDetails) internal returns (uint256 auctionID) {
-        uint256 oTokenSellAmount = getOTokenSellAmount(auctionDetails.oTokenAddress);
+        uint256 onTokenSellAmount = getONTokenSellAmount(auctionDetails.onTokenAddress);
 
-        IERC20(auctionDetails.oTokenAddress).safeApprove(
+        IERC20Detailed(auctionDetails.onTokenAddress).safeApprove(
             auctionDetails.gnosisEasyAuction,
-            IERC20(auctionDetails.oTokenAddress).balanceOf(address(this))
+            IERC20Detailed(auctionDetails.onTokenAddress).balanceOf(address(this))
         );
 
-        // minBidAmount is total oTokens to sell * premium per oToken
+        // minBidAmount is total onTokens to sell * premium per onToken
         // shift decimals to correspond to decimals of USDC for puts
         // and underlying for calls
-        uint256 minBidAmount = DSMath.wmul(oTokenSellAmount.mul(10**10), auctionDetails.oTokenPremium);
+        uint256 minBidAmount = DSMath.wmul(onTokenSellAmount.mul(10**10), auctionDetails.onTokenPremium);
 
         minBidAmount = auctionDetails.assetDecimals > 18
             ? minBidAmount.mul(10**(auctionDetails.assetDecimals.sub(18)))
             : minBidAmount.div(10**(uint256(18).sub(auctionDetails.assetDecimals)));
 
-        require(minBidAmount <= type(uint96).max, "optionPremium * oTokenSellAmount > type(uint96) max value!");
+        require(minBidAmount <= type(uint96).max, "optionPremium * onTokenSellAmount > type(uint96) max value!");
 
         uint256 auctionEnd = block.timestamp.add(auctionDetails.duration);
 
         auctionID = IGnosisAuction(auctionDetails.gnosisEasyAuction).initiateAuction(
-            // address of oToken we minted and are selling
-            auctionDetails.oTokenAddress,
-            // address of asset we want in exchange for oTokens. Should match vault `asset`
+            // address of onToken we minted and are selling
+            auctionDetails.onTokenAddress,
+            // address of asset we want in exchange for onTokens. Should match vault `asset`
             auctionDetails.asset,
             // orders can be cancelled at any time during the auction
             auctionEnd,
             // order will last for `duration`
             auctionEnd,
-            // we are selling all of the otokens minus a fee taken by gnosis
-            uint96(oTokenSellAmount),
-            // the minimum we are willing to sell all the oTokens for. A discount is applied on black-scholes price
+            // we are selling all of the onTokens minus a fee taken by gnosis
+            uint96(onTokenSellAmount),
+            // the minimum we are willing to sell all the onTokens for. A discount is applied on black-scholes price
             uint96(minBidAmount),
             // the minimum bidding amount must be 1 * 10 ** -assetDecimals
             1,
@@ -99,57 +99,10 @@ library GnosisAuction {
             bytes("")
         );
 
-        emit InitiateGnosisAuction(auctionDetails.oTokenAddress, auctionDetails.asset, auctionID, msg.sender);
+        emit InitiateGnosisAuction(auctionDetails.onTokenAddress, auctionDetails.asset, auctionID, msg.sender);
     }
 
-    function placeBid(BidDetails calldata bidDetails)
-        internal
-        returns (
-            uint256 sellAmount,
-            uint256 buyAmount,
-            uint64 userId
-        )
-    {
-        // calculate how much to allocate
-        sellAmount = bidDetails.lockedBalance.mul(bidDetails.optionAllocation).div(
-            100 * Vault.OPTION_ALLOCATION_MULTIPLIER
-        );
-
-        // divide the `asset` sellAmount by the target premium per oToken to
-        // get the number of oTokens to buy (8 decimals)
-        buyAmount = sellAmount
-            .mul(10**(bidDetails.assetDecimals.add(Vault.OTOKEN_DECIMALS)))
-            .div(bidDetails.optionPremium)
-            .div(10**bidDetails.assetDecimals);
-
-        require(sellAmount <= type(uint96).max, "sellAmount > type(uint96) max value!");
-        require(buyAmount <= type(uint96).max, "buyAmount > type(uint96) max value!");
-
-        // approve that amount
-        IERC20(bidDetails.asset).safeApprove(bidDetails.gnosisEasyAuction, sellAmount);
-
-        uint96[] memory _minBuyAmounts = new uint96[](1);
-        uint96[] memory _sellAmounts = new uint96[](1);
-        bytes32[] memory _prevSellOrders = new bytes32[](1);
-        _minBuyAmounts[0] = uint96(buyAmount);
-        _sellAmounts[0] = uint96(sellAmount);
-        _prevSellOrders[0] = 0x0000000000000000000000000000000000000000000000000000000000000001;
-
-        // place sell order with that amount
-        userId = IGnosisAuction(bidDetails.gnosisEasyAuction).placeSellOrders(
-            bidDetails.auctionId,
-            _minBuyAmounts,
-            _sellAmounts,
-            _prevSellOrders,
-            "0x"
-        );
-
-        emit PlaceAuctionBid(bidDetails.auctionId, bidDetails.oTokenAddress, sellAmount, buyAmount, bidDetails.bidder);
-
-        return (sellAmount, buyAmount, userId);
-    }
-
-    function claimAuctionOtokens(
+    function claimAuctionONtokens(
         Vault.AuctionSellOrder calldata auctionSellOrder,
         address gnosisEasyAuction,
         address counterpartyThetaVault
@@ -163,30 +116,66 @@ library GnosisAuction {
         );
     }
 
-    function getOTokenSellAmount(address oTokenAddress) internal view returns (uint256) {
-        // We take our current oToken balance. That will be our sell amount
-        // but otokens will be transferred to gnosis.
-        uint256 oTokenSellAmount = IERC20(oTokenAddress).balanceOf(address(this));
+    function getONTokenSellAmount(address onTokenAddress) internal view returns (uint256) {
+        // We take our current onToken balance. That will be our sell amount
+        // but onTokens will be transferred to gnosis.
+        uint256 onTokenSellAmount = IERC20Detailed(onTokenAddress).balanceOf(address(this));
 
-        require(oTokenSellAmount <= type(uint96).max, "oTokenSellAmount > type(uint96) max value!");
+        require(onTokenSellAmount <= type(uint96).max, "onTokenSellAmount > type(uint96) max value!");
 
-        return oTokenSellAmount;
+        return onTokenSellAmount;
     }
 
-    function getOTokenPremium(
-        address oTokenAddress,
+    function convertAmountOnLivePrice(
+        uint256 _amount,
+        address _assetA,
+        address _assetB,
+        address oracleAddress
+    ) internal view returns (uint256) {
+        console.log("oracleAddress", oracleAddress);
+        console.log("_assetB", _assetB);
+        console.log("_assetA", _assetA);
+        console.log("_amount", _amount);
+        if (_assetA == _assetB) {
+            return _amount;
+        }
+        IOracle oracle = IOracle(oracleAddress);
+
+        uint256 priceA = oracle.getPrice(_assetA);
+        console.log(")internalviewreturns ~ priceA", priceA);
+        uint256 priceB = oracle.getPrice(_assetB);
+        console.log(")internalviewreturns ~ priceB", priceB);
+        uint256 assetADecimals = IERC20Detailed(_assetA).decimals();
+        uint256 assetBDecimals = IERC20Detailed(_assetB).decimals();
+
+        uint256 decimalShift = assetADecimals > assetBDecimals
+            ? 10**(assetADecimals.sub(assetBDecimals))
+            : 10**(assetBDecimals.sub(assetADecimals));
+
+        uint256 assetAValue = _amount.mul(priceA);
+
+        return
+            assetADecimals > assetBDecimals
+                ? assetAValue.div(priceB).div(decimalShift)
+                : assetAValue.mul(decimalShift).div(priceB);
+    }
+
+    function getONTokenPremium(
+        address onTokenAddress,
         address optionsPremiumPricer,
         uint256 premiumDiscount
     ) internal view returns (uint256) {
-        IOtoken newOToken = IOtoken(oTokenAddress);
-        console.log("newOToken", oTokenAddress);
+        IONtoken newONToken = IONtoken(onTokenAddress);
         IOptionsPremiumPricer premiumPricer = IOptionsPremiumPricer(optionsPremiumPricer);
 
         // Apply black-scholes formula (from rvol library) to option given its features
         // and get price for 100 contracts denominated in the underlying asset for call option
         // and USDC for put option
-        uint256 optionPremium =
-            premiumPricer.getPremium(newOToken.strikePrice(), newOToken.expiryTimestamp(), newOToken.isPut());
+        uint256 optionPremium = premiumPricer.getPremium(
+            newONToken.strikePrice(),
+            newONToken.expiryTimestamp(),
+            newONToken.isPut()
+        );
 
         // Apply a discount to incentivize arbitraguers
         optionPremium = optionPremium.mul(premiumDiscount).div(100 * Vault.PREMIUM_DISCOUNT_MULTIPLIER);
@@ -196,21 +185,31 @@ library GnosisAuction {
         return optionPremium;
     }
 
-    function getOTokenPremiumInStables(
-        address oTokenAddress,
+    function getONTokenPremiumInToken(
+        address oracleAddress,
+        address onTokenAddress,
         address optionsPremiumPricer,
-        uint256 premiumDiscount
+        uint256 premiumDiscount,
+        address convertFromToken,
+        address convertTonToken
     ) internal view returns (uint256) {
-        IOtoken newOToken = IOtoken(oTokenAddress);
+        IONtoken newONToken = IONtoken(onTokenAddress);
         IOptionsPremiumPricer premiumPricer = IOptionsPremiumPricer(optionsPremiumPricer);
 
         // Apply black-scholes formula (from rvol library) to option given its features
-        // and get price for 100 contracts denominated USDC for both call and put options
-        uint256 optionPremium =
-            premiumPricer.getPremiumInStables(newOToken.strikePrice(), newOToken.expiryTimestamp(), newOToken.isPut());
+        // and get price for 100 contracts denominated in the underlying asset for call option
+        // and USDC for put option
+        uint256 optionPremium = premiumPricer.getPremium(
+            newONToken.strikePrice(),
+            newONToken.expiryTimestamp(),
+            newONToken.isPut()
+        );
 
         // Apply a discount to incentivize arbitraguers
         optionPremium = optionPremium.mul(premiumDiscount).div(100 * Vault.PREMIUM_DISCOUNT_MULTIPLIER);
+
+        console.log("BEFORE CONVERT");
+        optionPremium = convertAmountOnLivePrice(optionPremium, convertFromToken, convertTonToken, oracleAddress);
 
         require(optionPremium <= type(uint96).max, "optionPremium > type(uint96) max value!");
 

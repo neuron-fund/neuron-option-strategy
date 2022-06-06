@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -11,20 +11,19 @@ import {ShareMath} from "../libraries/ShareMath.sol";
 import {VaultLifecycle} from "../libraries/VaultLifecycle.sol";
 import {NeuronPoolUtils} from "../libraries/NeuronPoolUtils.sol";
 import {NeuronVault} from "./NeuronVault.sol";
-import {NeuronThetaYearnVaultStorage} from "../storage/NeuronThetaYearnVaultStorage.sol";
+import {NeuronThetaVaultStorage} from "../storage/NeuronThetaVaultStorage.sol";
 import {INeuronCollateralVault} from "../interfaces/INeuronCollateralVault.sol";
 import {INeuronPool} from "../interfaces/INeuronPool.sol";
-import {NeuronPoolUtils} from "../libraries/NeuronPoolUtils.sol";
-
+import {IController} from "../interfaces/GammaInterface.sol";
 import "hardhat/console.sol";
 
 /**
  * UPGRADEABILITY: Since we use the upgradeable proxy pattern, we must observe
  * the inheritance chain closely.
- * Any changes/appends in storage variable needs to happen in NeuronThetaYearnVaultStorage.
- * NeuronThetaYearnVault should not inherit from any other contract aside from NeuronVault, NeuronThetaYearnVaultStorage
+ * Any changes/appends in storage variable needs to happen in NeuronThetaVaultStorage.
+ * NeuronThetaYearnVault should not inherit from any other contract aside from NeuronVault, NeuronThetaVaultStorage
  */
-contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
+contract NeuronThetaVault is NeuronVault, NeuronThetaVaultStorage {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using ShareMath for Vault.DepositReceipt;
@@ -33,9 +32,9 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
      *  IMMUTABLES & CONSTANTS
      ***********************************************/
 
-    /// @notice oTokenFactory is the factory contract used to spawn otokens. Used to lookup otokens.
+    /// @notice onTokenFactory is the factory contract used to spawn onTokens. Used to lookup onTokens.
     // TODO neuron do not make this immutable
-    address public immutable OTOKEN_FACTORY;
+    address public immutable ON_TOKEN_FACTORY;
 
     // The minimum duration for an option auction.
     uint256 private constant MIN_AUCTION_DURATION = 5 minutes;
@@ -73,7 +72,7 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
      * @notice Initializes the contract with immutable variables
      * @param _weth is the Wrapped Ether contract
      * @param _usdc is the USDC contract
-     * @param _oTokenFactory is the contract address for minting new opyn option types (strikes, asset, expiry)
+     * @param _onTokenFactory is the contract address for minting new opyn option types (strikes, asset, expiry)
      * @param _gammaController is the contract address for opyn actions
      * @param _marginPool is the contract address for providing collateral to opyn
      * @param _gnosisEasyAuction is the contract address that facilitates gnosis auctions
@@ -81,15 +80,14 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
     constructor(
         address _weth,
         address _usdc,
-        address _oTokenFactory,
+        address _onTokenFactory,
         address _gammaController,
         address _marginPool,
         address _gnosisEasyAuction,
-        address _dexRouter,
-        address _dexFactory
-    ) NeuronVault(_weth, _usdc, _gammaController, _marginPool, _gnosisEasyAuction, _dexRouter, _dexFactory) {
-        require(_oTokenFactory != address(0), "!_oTokenFactory");
-        OTOKEN_FACTORY = _oTokenFactory;
+        address _dexRouter
+    ) NeuronVault(_weth, _usdc, _gammaController, _marginPool, _gnosisEasyAuction, _dexRouter) {
+        require(_onTokenFactory != address(0), "!_onTokenFactory");
+        ON_TOKEN_FACTORY = _onTokenFactory;
     }
 
     /**
@@ -143,10 +141,7 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
         strikeSelection = _strikeSelection;
         premiumDiscount = _premiumDiscount;
         auctionDuration = _auctionParams.auctionDuration;
-        auctionBiddingToken = _auctionParams.auctionBiddingToken != address(0)
-            ? _auctionParams.auctionBiddingToken
-            : _vaultParams.asset;
-        auctionPremiumSwapPath = _auctionParams.auctionPremiumSwapPath;
+        auctionBiddingToken = _auctionParams.auctionBiddingToken;
     }
 
     /************************************************
@@ -179,16 +174,6 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
     }
 
     /**
-     * @notice Sets a new path for swaps
-     * @param newSwapPath is the new path
-     */
-    function setAuctionPremiumSwapPath(bytes calldata newSwapPath) external onlyOwner nonReentrant {
-        require(_checkPath(newSwapPath), "Invalid swapPath");
-        console.log("BEFORE SWAP PATH");
-        auctionPremiumSwapPath = newSwapPath;
-    }
-
-    /**
      * @notice Sets the new strike selection contract
      * @param newStrikeSelection is the address of the new strike selection contract
      */
@@ -208,7 +193,7 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
 
     /**
      * @notice Optionality to set strike price manually
-     * @param strikePrice is the strike price of the new oTokens (decimals = 8)
+     * @param strikePrice is the strike price of the new onTokens (decimals = 8)
      */
     function setStrikePrice(uint128 strikePrice) external onlyOwner nonReentrant {
         require(strikePrice > 0, "!strikePrice");
@@ -223,50 +208,46 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
     function commitAndClose() external nonReentrant {
         address oldOption = optionState.currentOption;
 
-        VaultLifecycle.CloseParams memory closeParams =
-            VaultLifecycle.CloseParams({
-                OTOKEN_FACTORY: OTOKEN_FACTORY,
-                USDC: USDC,
-                currentOption: oldOption,
-                delay: DELAY,
-                lastStrikeOverrideRound: lastStrikeOverrideRound,
-                overriddenStrikePrice: overriddenStrikePrice
-            });
+        VaultLifecycle.CloseParams memory closeParams = VaultLifecycle.CloseParams({
+            ON_TOKEN_FACTORY: ON_TOKEN_FACTORY,
+            USDC: USDC,
+            currentOption: oldOption,
+            delay: DELAY,
+            lastStrikeOverrideRound: lastStrikeOverrideRound,
+            overriddenStrikePrice: overriddenStrikePrice
+        });
 
-        (address otokenAddress, uint256 premium, uint256 strikePrice, uint256 delta) =
-            VaultLifecycle.commitAndClose(
-                strikeSelection,
-                optionsPremiumPricer,
-                premiumDiscount,
-                closeParams,
-                vaultParams,
-                vaultState
-            );
-
+        address oracle = IController(GAMMA_CONTROLLER).oracle();
+        VaultLifecycle.ClosePremiumParams memory closePremiumParams = VaultLifecycle.ClosePremiumParams(
+            oracle,
+            strikeSelection,
+            optionsPremiumPricer,
+            premiumDiscount,
+            auctionBiddingToken
+        );
+        (address onTokenAddress, uint256 premium, uint256 strikePrice, uint256 delta) = VaultLifecycle.commitAndClose(
+            USDC,
+            vaultState.round,
+            vaultParams,
+            closeParams,
+            closePremiumParams
+        );
         emit NewOptionStrikeSelected(strikePrice, delta);
         ShareMath.assertUint104(premium);
 
-        currentOtokenPremium = uint104(premium);
-        optionState.nextOption = otokenAddress;
+        currentONtokenPremium = uint104(premium);
+        optionState.nextOption = onTokenAddress;
 
         uint256 nextOptionReady = block.timestamp.add(DELAY);
         require(nextOptionReady <= type(uint32).max, "Overflow nextOptionReady");
         optionState.nextOptionReadyAt = uint32(nextOptionReady);
 
+        address auctionBiddingToken = auctionBiddingToken;
+        uint256 premiumAmount = IERC20(auctionBiddingToken).balanceOf(address(this));
+        console.log("AFTER SWAP");
         _closeShort(oldOption);
 
-        address asset = vaultParams.asset;
-        address auctionBiddingToken = auctionBiddingToken;
-
-        // Swap auction premium to asset if premium is different from asset
-        // TODO neuron test this case
-        if (asset != auctionBiddingToken) {
-            VaultLifecycle.swap(auctionBiddingToken, 0, DEX_ROUTER, auctionPremiumSwapPath);
-        }
-
         // Premium
-        uint256 assetBalance = IERC20(asset).balanceOf(address(this));
-        console.log("commitAndClose ~ asset", asset);
         uint256 roundLockedAmount = vaultState.lastLockedAmount;
         uint256 currentRound = vaultState.round;
         address[] memory collateralVaults = vaultParams.collateralVaults;
@@ -275,36 +256,24 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
         for (uint256 i = 0; i < collateralVaults.length; i++) {
             // Share of collateral vault is calculated as:
             // (premium) * collateralVaultProvidedValue / totalLockedValueForRound
-            // TODO neuron check this calculation does not have rounding errors
-            uint256 collateralVaultPremiumShare =
-                roundLockedAmount == 0
-                    ? 0
-                    : (assetBalance * roundCollateralsValues[currentRound][i]) / roundLockedAmount;
-
-            console.log("commitAndClose ~ assetBalance", assetBalance);
-            console.log(
-                "commitAndClose ~ roundCollateralsValues[currentRound][i]",
-                roundLockedAmount == 0 ? 0 : roundCollateralsValues[currentRound][i]
-            );
-            console.log("commitAndClose ~ roundLockedAmount", roundLockedAmount);
-            console.log("commitAndClose ~ collateralVaultPremiumShare", collateralVaultPremiumShare);
+            uint256 collateralVaultPremiumShare = roundLockedAmount == 0
+                ? 0
+                : (premiumAmount * roundCollateralsValues[currentRound][i]) / roundLockedAmount;
+            // Unlocked collateral after option expiry
             uint256 collateralAssetBalance = IERC20(collateralAssets[i]).balanceOf(address(this));
-            console.log("commitAndClose ~ collateralAssetBalance", collateralAssetBalance);
-            console.log(
-                "commitAndClose ~  IERC20(asset).balanceOf(collateralVaults[i])",
-                IERC20(asset).balanceOf(collateralVaults[i])
-            );
-            NeuronPoolUtils.transferAsset(WETH, asset, collateralVaults[i], collateralVaultPremiumShare);
-            NeuronPoolUtils.transferAsset(WETH, collateralAssets[i], collateralVaults[i], collateralAssetBalance);
-            console.log(
-                "commitAndClose ~  IERC20(asset).balanceOf(collateralVaults[i])",
-                IERC20(asset).balanceOf(collateralVaults[i])
-            );
-            INeuronCollateralVault(collateralVaults[i]).commitAndClose();
-            console.log(
-                "commitAndClose ~  IERC20(asset).balanceOf(collateralVaults[i])",
-                IERC20(asset).balanceOf(collateralVaults[i])
-            );
+
+            if (collateralVaultPremiumShare != 0) {
+                NeuronPoolUtils.transferAsset(
+                    WETH,
+                    auctionBiddingToken,
+                    collateralVaults[i],
+                    collateralVaultPremiumShare
+                );
+            }
+            if (collateralAssetBalance != 0) {
+                NeuronPoolUtils.transferAsset(WETH, collateralAssets[i], collateralVaults[i], collateralAssetBalance);
+            }
+            INeuronCollateralVault(collateralVaults[i]).commitAndClose(auctionBiddingToken);
         }
     }
 
@@ -348,15 +317,15 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
     function _startAuction() private {
         GnosisAuction.AuctionDetails memory auctionDetails;
 
-        uint256 currOtokenPremium = currentOtokenPremium;
+        uint256 currONtokenPremium = currentONtokenPremium;
 
-        require(currOtokenPremium > 0, "!currentOtokenPremium");
+        require(currONtokenPremium > 0, "!currentONtokenPremium");
 
-        auctionDetails.oTokenAddress = optionState.currentOption;
+        auctionDetails.onTokenAddress = optionState.currentOption;
         auctionDetails.gnosisEasyAuction = GNOSIS_EASY_AUCTION;
-        auctionDetails.asset = vaultParams.asset;
+        auctionDetails.asset = auctionBiddingToken;
         auctionDetails.assetDecimals = vaultParams.decimals;
-        auctionDetails.oTokenPremium = currOtokenPremium;
+        auctionDetails.onTokenPremium = currONtokenPremium;
         auctionDetails.duration = auctionDuration;
 
         optionAuctionID = VaultLifecycle.startAuction(auctionDetails);
@@ -367,21 +336,23 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaYearnVaultStorage {
     }
 
     /**
-     * @notice Burn the remaining oTokens left over from gnosis auction.
+     * @notice Burn the remaining onTokens left over from gnosis auction.
      */
-    function burnRemainingOTokens() external onlyKeeper nonReentrant {
-        uint256[] memory unlockedCollateralAssetsAmounts =
-            VaultLifecycle.burnOtokens(vaultParams, GAMMA_CONTROLLER, optionState.currentOption);
+    function burnRemainingONTokens() external onlyKeeper nonReentrant {
+        uint256[] memory unlockedCollateralAssetsAmounts = VaultLifecycle.burnONtokens(
+            vaultParams,
+            GAMMA_CONTROLLER,
+            optionState.currentOption
+        );
         address[] memory collateralVaults = vaultParams.collateralVaults;
         address[] memory collateralAssets = vaultParams.collateralAssets;
         uint256 unlockedAssetAmount;
         for (uint256 i = 0; i < collateralVaults.length; i++) {
             INeuronPool collateral = INeuronPool(collateralAssets[i]);
-            uint256 amountInAsset =
-                DSMath.wdiv(
-                    unlockedCollateralAssetsAmounts[i],
-                    collateral.pricePerShare().mul(NeuronPoolUtils.decimalShift(collateralAssets[i]))
-                );
+            uint256 amountInAsset = DSMath.wdiv(
+                unlockedCollateralAssetsAmounts[i],
+                collateral.pricePerShare().mul(NeuronPoolUtils.decimalShift(collateralAssets[i]))
+            );
             unlockedAssetAmount = unlockedAssetAmount.add(amountInAsset);
             NeuronPoolUtils.transferAsset(
                 WETH,

@@ -2,20 +2,21 @@ import { BigNumber } from '@ethersproject/bignumber'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { Contract } from 'ethers'
 import { ethers } from 'hardhat'
+import { INeuronPool } from '../typechain-types'
 import { getAsset } from './funds'
 
 /**
  * Deposits some assets to NeuronPool before tests so it has non-zero pricePerShare.
  */
-export async function prepareNeuronPool(chainId: number, neuronPool: Contract) {
+export async function prepareNeuronPool(chainId: number, neuronPool: INeuronPool) {
   const depositor = (await ethers.getSigners())[30]
-  const assetAddress = await neuronPool.connect(depositor).asset()
+  const assetAddress = await neuronPool.connect(depositor).token()
   const assetContract = await ethers.getContractAt('IERC20Detailed', assetAddress)
   const assetDecimals = await assetContract.connect(depositor).decimals()
   const depositAmount = ethers.utils.parseUnits('100', assetDecimals)
   await getAsset(chainId, assetAddress, depositAmount, depositor.address)
   await assetContract.connect(depositor).approve(neuronPool.address, depositAmount)
-  await neuronPool.connect(depositor).deposit(depositAmount)
+  await neuronPool.connect(depositor).deposit(assetContract.address, depositAmount)
 }
 
 export async function depositToNeuronPool(
@@ -32,5 +33,5 @@ export async function depositToNeuronPool(
     : ethers.utils.parseUnits(amount.toString(), assetDecimals)
   await getAsset(chainId, assetAddress, depositAmount, depositor.address)
   await assetContract.connect(depositor).approve(neuronPool.address, depositAmount)
-  await neuronPool.connect(depositor).deposit(depositAmount)
+  await neuronPool.connect(depositor).deposit(depositAmount, assetContract.address)
 }

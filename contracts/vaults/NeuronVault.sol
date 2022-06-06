@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -9,7 +9,6 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 import {DSMath} from "../vendor/DSMath.sol";
-import {IYearnRegistry, IYearnVault} from "../interfaces/IYearn.sol";
 import {Vault} from "../libraries/Vault.sol";
 import {VaultLifecycle} from "../libraries/VaultLifecycle.sol";
 import {ShareMath} from "../libraries/ShareMath.sol";
@@ -18,6 +17,7 @@ import {INeuronCollateralVault} from "../interfaces/INeuronCollateralVault.sol";
 import "hardhat/console.sol";
 
 contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
+    // TODO neuron posibillity to add new collateral vaults
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using ShareMath for Vault.DepositReceipt;
@@ -37,7 +37,7 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
     /// @notice Fee recipient for the performance and management fees
     address public feeRecipient;
 
-    /// @notice role in charge of weekly vault operations such as rollToNextOption and burnRemainingOTokens
+    /// @notice role in charge of weekly vault operations such as rollToNextOption and burnRemainingONTokens
     // no access to critical vault changes
     address public keeper;
 
@@ -83,7 +83,7 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
     address public immutable GAMMA_CONTROLLER;
 
     // MARGIN_POOL is Gamma protocol's collateral pool.
-    // Needed to approve collateral.safeTransferFrom for minting otokens.
+    // Needed to approve collateral.safeTransferFrom for minting onTokens.
     // https://github.com/opynfinance/GammaProtocol/blob/master/contracts/core/MarginPool.sol
     address public immutable MARGIN_POOL;
 
@@ -91,13 +91,8 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
     // https://github.com/gnosis/ido-contracts/blob/main/contracts/EasyAuction.sol
     address public immutable GNOSIS_EASY_AUCTION;
 
-    // DEX_ROUTER is the contract address of UniswapV3 Router which handles swaps
-    // https://github.com/Uniswap/v3-periphery/blob/main/contracts/interfaces/ISwapRouter.sol
+    // DEX_ROUTER is the contract address of UniswapV2 Router which handles swaps
     address public immutable DEX_ROUTER;
-
-    // DEX_FACTORY is the contract address of UniswapV3 Factory which stores pool information
-    // https://github.com/Uniswap/v3-core/blob/main/contracts/interfaces/IUniswapV3Factory.sol
-    address public immutable DEX_FACTORY;
 
     /************************************************
      *  EVENTS
@@ -135,22 +130,21 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
         address _gammaController,
         address _marginPool,
         address _gnosisEasyAuction,
-        address _dexRouter,
-        address _dexFactory
+        address _dexRouter
     ) {
         require(_weth != address(0), "!_weth");
         require(_usdc != address(0), "!_usdc");
-        require(_gnosisEasyAuction != address(0), "!_gnosisEasyAuction");
         require(_gammaController != address(0), "!_gammaController");
         require(_marginPool != address(0), "!_marginPool");
+        require(_gnosisEasyAuction != address(0), "!_gnosisEasyAuction");
+        require(_dexRouter != address(0), "!_dexRouter");
 
         WETH = _weth;
         USDC = _usdc;
         GAMMA_CONTROLLER = _gammaController;
         MARGIN_POOL = _marginPool;
         GNOSIS_EASY_AUCTION = _gnosisEasyAuction;
-        DEX_FACTORY = _dexRouter;
-        DEX_ROUTER = _dexFactory;
+        DEX_ROUTER = _dexRouter;
     }
 
     /**
@@ -285,8 +279,6 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
         for (uint256 i = 0; i < collateralVaults.length; i++) {
             (lockedCollateralsAmounts[i], lockedCollateralsValues[i]) = INeuronCollateralVault(collateralVaults[i])
                 .rollToNextOption();
-            console.log("lockedCollateralsValues[i])", lockedCollateralsValues[i]);
-            console.log("lockedCollateralsAmounts[i]", lockedCollateralsAmounts[i]);
             totalLockedCollateralValue = totalLockedCollateralValue.add(lockedCollateralsValues[i]);
         }
 
@@ -298,15 +290,6 @@ contract NeuronVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upg
     /************************************************
      *  HELPERS
      ***********************************************/
-
-    /**
-     * @notice Helper to check whether swap path goes from stables (USDC) to vault's underlying asset
-     * @param swapPath is the swap path e.g. encodePacked(tokenIn, poolFee, tokenOut)
-     * @return boolean whether the path is valid
-     */
-    function _checkPath(bytes calldata swapPath) internal view returns (bool) {
-        return VaultLifecycle.checkPath(swapPath, USDC, vaultParams.asset, DEX_FACTORY);
-    }
 
     function getVaultParams() external view returns (Vault.VaultParams memory) {
         return vaultParams;

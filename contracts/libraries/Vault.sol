@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 library Vault {
     /************************************************
@@ -12,8 +12,8 @@ library Vault {
     // Premium discount has 1-decimal place. For example: 80 * 10**1 = 80%. Which represents a 20% discount.
     uint256 internal constant PREMIUM_DISCOUNT_MULTIPLIER = 10;
 
-    // Otokens have 8 decimal places.
-    uint256 internal constant OTOKEN_DECIMALS = 8;
+    // ONtokens have 8 decimal places.
+    uint256 internal constant ON_TOKEN_DECIMALS = 8;
 
     // Percentage of funds allocated to options is 2 decimal places. 10 * 10**2 = 10%
     uint256 internal constant OPTION_ALLOCATION_MULTIPLIER = 10**2;
@@ -26,7 +26,7 @@ library Vault {
         bool isPut;
         // Token decimals for vault shares
         uint8 decimals;
-        // Asset which will be wrapped to one of assets
+        // Main token Neuron Pool wants
         address asset;
         // Neuron pool address
         address collateralAsset;
@@ -43,8 +43,6 @@ library Vault {
         bool isPut;
         // Token decimals for vault shares
         uint8 decimals;
-        // Asset which will be wrapped to one of assets
-        address asset;
         // Asset used in Theta / Delta Vault
         address[] collateralAssets;
         // Underlying asset of the options sold by vault
@@ -58,8 +56,6 @@ library Vault {
         uint256 auctionDuration;
         // Auction bid token address
         address auctionBiddingToken;
-        // Auction bid token to asset swap path
-        bytes auctionPremiumSwapPath;
     }
 
     struct OptionState {
@@ -118,7 +114,7 @@ library Vault {
     struct AuctionSellOrder {
         // Amount of `asset` token offered in auction
         uint96 sellAmount;
-        // Amount of oToken requested in auction
+        // Amount of onToken requested in auction
         uint96 buyAmount;
         // User Id of delta vault in latest gnosis auction
         uint64 userId;

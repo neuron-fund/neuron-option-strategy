@@ -1,7 +1,6 @@
 import hre, { ethers, artifacts } from 'hardhat'
 import { increaseTo } from './time'
-import ORACLE_ABI from '../../constants/abis/OpynOracle.json'
-import CHAINLINK_PRICER_ABI from '../../constants/abis/ChainLinkPricer.json'
+import ORACLE_ABI from '../constants/abis/OpynOracle.json'
 import {
   CHAINID,
   GAMMA_ORACLE,
@@ -13,11 +12,11 @@ import {
   ORACLE_OWNER,
   USDC_ADDRESS,
   WBTC_ADDRESS,
-} from '../../constants/constants'
+} from '../constants/constants'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
-import { BigNumber, BigNumberish, Contract } from 'ethers'
+import { BigNumber, BigNumberish, Contract, Signer } from 'ethers'
 import { wmul } from '../helpers/math'
-
+import { getAsset } from './funds'
 const { provider } = ethers
 const { parseEther } = ethers.utils
 const chainId = hre.network.config.chainId || 1
@@ -25,7 +24,7 @@ const chainId = hre.network.config.chainId || 1
 export async function deployProxy(
   logicContractName: string,
   adminSigner: SignerWithAddress,
-  initializeArgs: any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+  initializeArgs: any[],
   logicDeployParams = [],
   factoryOptions = {}
 ) {
@@ -66,7 +65,7 @@ export async function getAssetPricer(pricer: string, signer: SignerWithAddress) 
   return await pricerContract.connect(ownerSigner)
 }
 
-export async function setAssetPricer(asset: string, pricer: string, isSTETH = false) {
+export async function setAssetPricer(asset: string, pricer: string) {
   await hre.network.provider.request({
     method: 'hardhat_impersonateAccount',
     params: [ORACLE_OWNER[chainId]],
@@ -74,7 +73,7 @@ export async function setAssetPricer(asset: string, pricer: string, isSTETH = fa
 
   const ownerSigner = await provider.getSigner(ORACLE_OWNER[chainId])
 
-  const oracle = await ethers.getContractAt('IOracle', isSTETH ? GAMMA_ORACLE_NEW[chainId] : GAMMA_ORACLE[chainId])
+  const oracle = await ethers.getContractAt('IOracle', GAMMA_ORACLE_NEW[chainId])
 
   await oracle.connect(ownerSigner).setAssetPricer(asset, pricer)
 }
@@ -110,36 +109,16 @@ export async function whitelistProduct(
   await whitelist.connect(ownerSigner).whitelistProduct(underlying, strike, collaterals, isPut)
 }
 
-export async function setupOracle(
-  chainlinkPricer: string,
-  signer: SignerWithAddress,
-  useNewGammaOracle = false,
-  useNewGammaOwner = false
-) {
-  await hre.network.provider.request({
-    method: 'hardhat_impersonateAccount',
-    params: [chainlinkPricer],
-  })
-
-  const oracleOwner = useNewGammaOwner ? GAMMA_WHITELIST_OWNER[chainId] : ORACLE_OWNER[chainId]
+export async function setupOracle(asset: string, signer: SignerWithAddress) {
+  const oracleOwner = GAMMA_WHITELIST_OWNER[chainId]
 
   await hre.network.provider.request({
     method: 'hardhat_impersonateAccount',
     params: [oracleOwner],
   })
-  const pricerSigner = await provider.getSigner(chainlinkPricer)
-
-  const forceSendContract = await ethers.getContractFactory('ForceSend')
-  const forceSend = await forceSendContract.deploy() // force Send is a contract that forces the sending of Ether to WBTC minter (which is a contract with no receive() function)
-  await forceSend.connect(signer).go(chainlinkPricer, { value: parseEther('0.5') })
-
-  const oracle = new ethers.Contract(
-    useNewGammaOracle ? GAMMA_ORACLE_NEW[chainId] : GAMMA_ORACLE[chainId],
-    ORACLE_ABI,
-    pricerSigner
-  )
-
   const oracleOwnerSigner = await provider.getSigner(oracleOwner)
+
+  const oracle = new ethers.Contract(GAMMA_ORACLE[chainId], ORACLE_ABI, oracleOwnerSigner)
 
   await signer.sendTransaction({
     to: oracleOwner,
@@ -148,11 +127,19 @@ export async function setupOracle(
 
   await oracle.connect(oracleOwnerSigner).setStablePrice(USDC_ADDRESS[chainId], '100000000')
 
-  const pricer = new ethers.Contract(chainlinkPricer, CHAINLINK_PRICER_ABI, oracleOwnerSigner)
+  const pricerAddress = await oracle.getPricer(asset)
+  await hre.network.provider.request({
+    method: 'hardhat_impersonateAccount',
+    params: [pricerAddress],
+  })
 
-  await oracle.connect(oracleOwnerSigner).setAssetPricer(await pricer.asset(), chainlinkPricer)
+  const forceSendContract = await ethers.getContractFactory('ForceSend')
+  const forceSend = await forceSendContract.deploy() // force Send is a contract that forces the sending of Ether to WBTC minter (which is a contract with no receive() function)
+  await forceSend.connect(signer).go(pricerAddress, { value: parseEther('0.5') })
 
-  return oracle
+  const pricerSigner = await provider.getSigner(pricerAddress)
+
+  return oracle.connect(pricerSigner)
 }
 
 export async function setOpynOracleExpiryPrice(
@@ -188,6 +175,32 @@ export async function setOpynOracleExpiryPriceYearn(
   const oracleOwnerSigner = await provider.getSigner(ORACLE_OWNER[chainId])
   const res2 = await collateralPricer.connect(oracleOwnerSigner).setExpiryPriceInOracle(expiry)
   const receipt = await res2.wait()
+
+  const timestamp = (await provider.getBlock(receipt.blockNumber)).timestamp
+  await increaseTo(timestamp + ORACLE_DISPUTE_PERIOD + 1)
+}
+export async function setOpynOracleExpiryPriceNeuron(
+  underlyingAsset: string,
+  underlyingOracle: Contract,
+  underlyingSettlePrice: BigNumber,
+  collateralPricers: Contract[],
+  expiry: BigNumber
+) {
+  await increaseTo(expiry.toNumber() + ORACLE_LOCKING_PERIOD + 1)
+
+  const res = await underlyingOracle.setExpiryPrice(underlyingAsset, expiry, underlyingSettlePrice)
+  await res.wait()
+  await hre.network.provider.request({
+    method: 'hardhat_impersonateAccount',
+    params: [ORACLE_OWNER[chainId]],
+  })
+  const oracleOwnerSigner = await provider.getSigner(ORACLE_OWNER[chainId])
+
+  let receipt
+  for (const collateralPricer of collateralPricers) {
+    const res2 = await collateralPricer.connect(oracleOwnerSigner).setExpiryPriceInOracle(expiry)
+    receipt = await res2.wait()
+  }
 
   const timestamp = (await provider.getBlock(receipt.blockNumber)).timestamp
   await increaseTo(timestamp + ORACLE_DISPUTE_PERIOD + 1)
@@ -259,11 +272,35 @@ export async function mintToken(
 export const isBridgeToken = (chainId: number, address: string) =>
   chainId === CHAINID.AVAX_MAINNET && (address === WBTC_ADDRESS[chainId] || address === USDC_ADDRESS[chainId])
 
-export async function bidForOToken(
+export const convertPriceAmount = async (tokenIn: string, tokenOut: string, amount: BigNumber, signer: Signer) => {
+  const oracle = new ethers.Contract(GAMMA_ORACLE[chainId], ORACLE_ABI, signer)
+  const inPrice = await oracle.getPrice(tokenIn)
+  const outPrice = await oracle.getPrice(tokenOut)
+
+  const tokenInDecimals = await (await ethers.getContractAt('IERC20Detailed', tokenIn, signer)).decimals()
+  const tokenOutDecimals = await (await ethers.getContractAt('IERC20Detailed', tokenOut, signer)).decimals()
+
+  const decimalShift =
+    tokenInDecimals > tokenOutDecimals
+      ? BigNumber.from(10).pow(tokenInDecimals - tokenOutDecimals)
+      : BigNumber.from(10).pow(tokenOutDecimals - tokenInDecimals)
+
+  const tokenInValue = amount.mul(inPrice)
+
+  const newReturn =
+    tokenInDecimals > tokenOutDecimals
+      ? tokenInValue.div(outPrice).div(decimalShift)
+      : tokenInValue.mul(decimalShift).div(outPrice)
+  // console.log('convertPriceAmount ~ newReturn', newReturn)
+
+  return newReturn
+}
+
+export async function bidForONToken(
   gnosisAuction: Contract,
-  assetContract: Contract,
+  biddingTokenContract: Contract,
   contractSigner: string,
-  oToken: string,
+  onToken: string,
   premium: BigNumber,
   assetDecimals: number,
   multiplier: string,
@@ -273,23 +310,20 @@ export async function bidForOToken(
 
   const latestAuction = (await gnosisAuction.auctionCounter()).toString()
   const totalOptionsAvailableToBuy = BigNumber.from(
-    await (await ethers.getContractAt('IERC20', oToken)).balanceOf(gnosisAuction.address)
+    await (await ethers.getContractAt('IERC20', onToken)).balanceOf(gnosisAuction.address)
   )
     .mul(await gnosisAuction.FEE_DENOMINATOR())
     .div((await gnosisAuction.FEE_DENOMINATOR()).add(await gnosisAuction.feeNumerator()))
     .div(multiplier)
 
   let bid = wmul(totalOptionsAvailableToBuy.mul(BigNumber.from(10).pow(10)), premium)
-  bid =
-    assetDecimals > 18
-      ? bid.mul(BigNumber.from(10).pow(assetDecimals - 18))
-      : bid.div(BigNumber.from(10).pow(18 - assetDecimals))
-
   const queueStartElement = '0x0000000000000000000000000000000000000000000000000000000000000001'
 
-  await assetContract.connect(userSigner).approve(gnosisAuction.address, bid.toString())
+  await getAsset(CHAINID.ETH_MAINNET, biddingTokenContract.address, bid, contractSigner)
 
-  // BID OTOKENS HERE
+  await biddingTokenContract.connect(userSigner).approve(gnosisAuction.address, bid.toString())
+
+  // BID ON_TOKENS HERE
   await gnosisAuction
     .connect(userSigner)
     .placeSellOrders(
@@ -299,6 +333,8 @@ export async function bidForOToken(
       [queueStartElement],
       '0x'
     )
+
+  console.log('after placeSellOrders')
 
   await increaseTo((await provider.getBlock('latest')).timestamp + auctionDuration)
 
@@ -331,7 +367,7 @@ export async function closeAuctionAndClaim(
 ) {
   const userSigner = await ethers.provider.getSigner(signer)
   await gnosisAuction.connect(userSigner).settleAuction(await thetaVault.optionAuctionID())
-  await vault.claimAuctionOtokens()
+  await vault.claimAuctionONtokens()
 }
 
 export interface Order {

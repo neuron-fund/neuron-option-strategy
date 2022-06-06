@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 abstract contract NeuronThetaVaultStorageV1 {
     // Logic contract used to price options
@@ -8,8 +8,8 @@ abstract contract NeuronThetaVaultStorageV1 {
     address public strikeSelection;
     // Premium discount on options we are selling (thousandths place: 000 - 999)
     uint256 public premiumDiscount;
-    // Current oToken premium
-    uint256 public currentOtokenPremium;
+    // Current onToken premium
+    uint256 public currentONtokenPremium;
     // Last round id at which the strike was manually overridden
     uint16 public lastStrikeOverrideRound;
     // Price last overridden strike set to
@@ -18,28 +18,18 @@ abstract contract NeuronThetaVaultStorageV1 {
     uint256 public auctionDuration;
     // Auction id of current option
     uint256 public optionAuctionID;
-}
-
-abstract contract NeuronThetaVaultStorageV2 {
     // Amount locked for scheduled withdrawals last week;
     uint256 public lastQueuedWithdrawAmount;
-}
-
-abstract contract NeuronThetaVaultStorageV3 {
-    // Auction will be denominated in USDC if true
-    bool public isUsdcAuction;
+    // Auction bid token address
+    address public auctionBiddingToken;
     // Path for swaps
-    bytes public swapPath;
+    bytes public auctionPremiumSwapPath;
 }
 
 // We are following Compound's method of upgrading new contract implementations
 // When we need to add new storage variables, we create a new version of NeuronThetaVaultStorage
 // e.g. NeuronThetaVaultStorage<versionNumber>, so finally it would look like
 // contract NeuronThetaVaultStorage is NeuronThetaVaultStorageV1, NeuronThetaVaultStorageV2
-abstract contract NeuronThetaVaultStorage is
-    NeuronThetaVaultStorageV1,
-    NeuronThetaVaultStorageV2,
-    NeuronThetaVaultStorageV3
-{
+abstract contract NeuronThetaVaultStorage is NeuronThetaVaultStorageV1 {
 
 }

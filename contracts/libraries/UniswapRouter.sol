@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {
-    SafeERC20
-} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ISwapRouter} from "../interfaces/ISwapRouter.sol";
-import {IUniswapV3Factory} from "../interfaces/IUniswapV3Factory.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IUniswapRouterV2} from "../interfaces/IUniswapRouterV2.sol";
 import "./Path.sol";
+
+import "hardhat/console.sol";
 
 library UniswapRouter {
     using Path for bytes;
@@ -16,91 +15,65 @@ library UniswapRouter {
     using SafeERC20 for IERC20;
 
     /**
-     * @notice Check if the path set for swap is valid
-     * @param swapPath is the swap path e.g. encodePacked(tokenIn, poolFee, tokenOut)
-     * @param validTokenIn is the contract address of the correct tokenIn
-     * @param validTokenOut is the contract address of the correct tokenOut
-     * @param uniswapFactory is the contract address of UniswapV3 factory
-     * @return isValidPath is whether the path is valid
-     */
-    function checkPath(
-        bytes memory swapPath,
-        address validTokenIn,
-        address validTokenOut,
-        address uniswapFactory
-    ) internal view returns (bool isValidPath) {
-        // Function checks if the tokenIn and tokenOut in the swapPath
-        // matches the validTokenIn and validTokenOut specified.
-        address tokenIn;
-        address tokenOut;
-        address tempTokenIn;
-        uint24 fee;
-        IUniswapV3Factory factory = IUniswapV3Factory(uniswapFactory);
-
-        // Return early if swapPath is below the bare minimum (43)
-        require(swapPath.length >= 43, "Path too short");
-        // Return early if swapPath is above the max (66)
-        // At worst we have 2 hops e.g. USDC > WETH > asset
-        require(swapPath.length <= 66, "Path too long");
-
-        // Decode the first pool in path
-        (tokenIn, tokenOut, fee) = swapPath.decodeFirstPool();
-
-        // Check to factory if pool exists
-        require(
-            factory.getPool(tokenIn, tokenOut, fee) != address(0),
-            "Pool does not exist"
-        );
-
-        // Check next pool if multiple pools
-        while (swapPath.hasMultiplePools()) {
-            // Remove the first pool from path
-            swapPath = swapPath.skipToken();
-            // Check the next pool and update tokenOut
-            (tempTokenIn, tokenOut, fee) = swapPath.decodeFirstPool();
-
-            require(
-                factory.getPool(tokenIn, tokenOut, fee) != address(0),
-                "Pool does not exist"
-            );
-        }
-
-        return tokenIn == validTokenIn && tokenOut == validTokenOut;
-    }
-
-    /**
      * @notice Swaps assets by calling UniswapV3 router
      * @param recipient is the address of recipient of the tokenOut
      * @param tokenIn is the address of the token given to the router
+     * @param tokenOut is the address of the token output from the router
      * @param amountIn is the amount of tokenIn given to the router
      * @param minAmountOut is the minimum acceptable amount of tokenOut received from swap
      * @param router is the contract address of UniswapV3 router
-     * @param swapPath is the swap path e.g. encodePacked(tokenIn, poolFee, tokenOut)
-     * @return amountOut is the amount of tokenOut received from the swap
+     * @param weth token address of WETH
      */
     function swap(
         address recipient,
         address tokenIn,
+        address tokenOut,
         uint256 amountIn,
         uint256 minAmountOut,
         address router,
-        bytes calldata swapPath
-    ) internal returns (uint256 amountOut) {
+        address weth
+    ) internal returns (uint256) {
         // Approve router to spend tokenIn
+        IERC20(tokenIn).safeApprove(router, 0);
         IERC20(tokenIn).safeApprove(router, amountIn);
+        require(tokenIn != address(0), "swap !tokenIn");
+        require(tokenOut != address(0), "swap !tokenOut");
+        require(router != address(0), "swap !router");
 
-        // Swap assets using UniswapV3 router
-        ISwapRouter.ExactInputParams memory swapParams =
-            ISwapRouter.ExactInputParams({
-                recipient: recipient,
-                path: swapPath,
-                deadline: block.timestamp.add(10 minutes),
-                amountIn: amountIn,
-                amountOutMinimum: minAmountOut
-            });
+        address[] memory path;
 
-        amountOut = ISwapRouter(router).exactInput(swapParams);
+        if (tokenIn == weth || tokenOut == weth) {
+            path = new address[](2);
+            path[0] = tokenIn;
+            path[1] = tokenOut;
+        } else {
+            path = new address[](3);
+            path[0] = tokenIn;
+            path[1] = weth;
+            path[2] = tokenOut;
+            console.log(")internalreturns ~ path[2]", path[2]);
+        }
+        console.log(")internalreturns ~ path[0]", path[0]);
+        console.log(")internalreturns ~ path[1]", path[1]);
 
-        return amountOut;
+        uint256 amountBefore = IERC20(tokenOut).balanceOf(recipient);
+
+        console.log(")internalreturns ~ minAmountOut", minAmountOut);
+        console.log(")internalreturns ~ amountIn", amountIn);
+        console.log("IERC20(tokenIn).allowence", IERC20(tokenIn).allowance(address(this), router));
+        console.log(")internalreturns ~ recipient", recipient);
+        console.log(")internalreturns ~ address(this)", address(this));
+        IUniswapRouterV2(router).swapExactTokensForTokens(
+            amountIn,
+            minAmountOut,
+            path,
+            recipient,
+            block.timestamp.add(60)
+        );
+        console.log("swapExactTokensForTokens after");
+        uint256 amountAfter = IERC20(tokenOut).balanceOf(recipient);
+        console.log(")internalreturns ~ amountAfter", amountAfter);
+
+        return amountAfter.sub(amountBefore);
     }
 }

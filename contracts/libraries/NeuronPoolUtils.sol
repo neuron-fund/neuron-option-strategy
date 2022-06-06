@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {DSMath} from "../vendor/DSMath.sol";
@@ -96,8 +96,10 @@ library NeuronPoolUtils {
         uint256 yieldTokenBalance,
         uint256 pricePerYearnShare
     ) internal {
-        uint256 underlyingTokensToWithdraw =
-            DSMath.wmul(withdrawAmount.sub(yieldTokenBalance), pricePerYearnShare.mul(decimalShift(collateralToken)));
+        uint256 underlyingTokensToWithdraw = DSMath.wmul(
+            withdrawAmount.sub(yieldTokenBalance),
+            pricePerYearnShare.mul(decimalShift(collateralToken))
+        );
         transferAsset(weth, asset, payable(recipient), underlyingTokensToWithdraw);
     }
 
@@ -118,17 +120,16 @@ library NeuronPoolUtils {
         uint256 assetBalance = IERC20(asset).balanceOf(address(this));
         INeuronPool collateral = INeuronPool(collateralToken);
 
-        uint256 amountToUnwrap =
-            DSMath.wdiv(
-                DSMath.max(assetBalance, amount).sub(assetBalance),
-                collateral.pricePerShare().mul(decimalShift(collateralToken))
-            );
+        uint256 amountToUnwrap = DSMath.wdiv(
+            DSMath.max(assetBalance, amount).sub(assetBalance),
+            collateral.pricePerShare().mul(decimalShift(collateralToken))
+        );
 
         if (amountToUnwrap > 0) {
             amountToUnwrap = amountToUnwrap.add(amountToUnwrap.mul(yearnWithdrawalBuffer).div(10000)).sub(1);
 
             console.log("amountToUnwrap", amountToUnwrap);
-            collateral.withdraw(amountToUnwrap);
+            collateral.withdraw(asset, amountToUnwrap);
         }
     }
 
@@ -148,7 +149,7 @@ library NeuronPoolUtils {
             // at that point in time.
             // ex: if I have 1 eth, deposit 1 eth into yearn vault and calculate value of yearn token balance
             // denominated in eth (via balance(yearn token) * pricePerShare) we will get 1 eth - 1 wei.
-            INeuronPool(collateralToken).deposit(amountToWrap);
+            INeuronPool(collateralToken).deposit(asset, amountToWrap);
         }
     }
 
@@ -168,13 +169,12 @@ library NeuronPoolUtils {
         if (amount == 0) {
             return;
         }
-        // TODO neuron why transfer as ETH isntead of WETH?
-        // if (asset == weth) {
-        //     IWETH(weth).withdraw(amount);
-        //     (bool success, ) = payable(recipient).call{value: amount}("");
-        //     require(success, "!success");
-        //     return;
-        // }
+        if (asset == weth) {
+            IWETH(weth).withdraw(amount);
+            (bool success, ) = payable(recipient).call{value: amount}("");
+            require(success, "!success");
+            return;
+        }
         IERC20(asset).safeTransfer(recipient, amount);
     }
 

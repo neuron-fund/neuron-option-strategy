@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -39,20 +39,11 @@ interface IGnosisAuction {
 
     function auctionCounter() external view returns (uint256);
 
-    function auctionData(uint256 auctionId)
-        external
-        view
-        returns (AuctionType.AuctionData memory);
+    function auctionData(uint256 auctionId) external view returns (AuctionType.AuctionData memory);
 
-    function auctionAccessManager(uint256 auctionId)
-        external
-        view
-        returns (address);
+    function auctionAccessManager(uint256 auctionId) external view returns (address);
 
-    function auctionAccessData(uint256 auctionId)
-        external
-        view
-        returns (bytes memory);
+    function auctionAccessData(uint256 auctionId) external view returns (bytes memory);
 
     function FEE_DENOMINATOR() external view returns (uint256);
 
@@ -68,8 +59,5 @@ interface IGnosisAuction {
         bytes calldata allowListCallData
     ) external returns (uint64);
 
-    function claimFromParticipantOrder(
-        uint256 auctionId,
-        bytes32[] memory orders
-    ) external returns (uint256, uint256);
+    function claimFromParticipantOrder(uint256 auctionId, bytes32[] memory orders) external returns (uint256, uint256);
 }

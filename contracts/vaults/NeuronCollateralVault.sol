@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -9,8 +9,8 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 import {DSMath} from "../vendor/DSMath.sol";
-import {IYearnVault} from "../interfaces/IYearn.sol";
 import {INeuronPool} from "../interfaces/INeuronPool.sol";
+import {INeuronCollateralVault} from "../interfaces/INeuronCollateralVault.sol";
 import {Vault} from "../libraries/Vault.sol";
 import {CollateralVaultLifecycle} from "../libraries/CollateralVaultLifecycle.sol";
 import {NeuronPoolUtils} from "../libraries/NeuronPoolUtils.sol";
@@ -18,7 +18,12 @@ import {ShareMath} from "../libraries/ShareMath.sol";
 
 import "hardhat/console.sol";
 
-contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
+contract NeuronCollateralVault is
+    INeuronCollateralVault,
+    ReentrancyGuardUpgradeable,
+    OwnableUpgradeable,
+    ERC20Upgradeable
+{
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using ShareMath for Vault.DepositReceipt;
@@ -38,6 +43,8 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
     /// @notice Stores pending user withdrawals
     mapping(address => Vault.Withdrawal) public withdrawals;
 
+    mapping(address => bool) public allowedDepositTokens;
+
     /// @notice Vault's parameters like cap, decimals
     Vault.CollateralVaultParams public vaultParams;
 
@@ -47,7 +54,7 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
     /// @notice Fee recipient for the performance and management fees
     address public feeRecipient;
 
-    /// @notice role in charge of weekly vault operations such as rollToNextOption and burnRemainingOTokens
+    /// @notice role in charge of weekly vault operations such as rollToNextOption and burnRemainingONTokens
     // no access to critical vault changes
     address public keeper;
 
@@ -57,7 +64,7 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
     /// @notice Management fee charged on entire AUM in rollToNextOption. Only charged when there is no loss.
     uint256 public managementFee;
 
-    /// @notice Yearn vault contract
+    /// @notice NeuronPool used as collateral contract
     INeuronPool public collateralToken;
 
     uint256 public lastQueuedWithdrawAmount;
@@ -139,9 +146,10 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
         address _feeRecipient,
         uint256 _managementFee,
         uint256 _performanceFee,
-        string memory _tokenName,
-        string memory _tokenSymbol,
-        Vault.CollateralVaultParams calldata _vaultParams
+        string calldata _tokenName,
+        string calldata _tokenSymbol,
+        Vault.CollateralVaultParams calldata _vaultParams,
+        address[] calldata _baseDepositTokens
     ) external initializer {
         CollateralVaultLifecycle.verifyInitializerParams(
             _owner,
@@ -153,13 +161,9 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
             _tokenSymbol,
             _vaultParams
         );
-        console.log("__ReentrancyGuard_init");
         __ReentrancyGuard_init();
-        console.log("__ERC20_init");
         __ERC20_init(_tokenName, _tokenSymbol);
-        console.log("__Ownable_init");
         __Ownable_init();
-        console.log("transferOwnership");
         transferOwnership(_owner);
 
         keeper = _keeper;
@@ -171,12 +175,14 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
 
         collateralToken = INeuronPool(_vaultParams.collateralAsset);
 
-        console.log("totalBalance");
         uint256 assetBalance = totalBalance();
-        console.log("ShareMath.assert");
         ShareMath.assertUint104(assetBalance);
-        console.log("vaultState.lastLockedAmount");
         vaultState.lastLockedAmount = uint104(assetBalance);
+
+        for (uint256 i = 0; i < _baseDepositTokens.length; i++) {
+            allowedDepositTokens[_baseDepositTokens[i]] = true;
+        }
+        allowedDepositTokens[_vaultParams.collateralAsset] = true;
 
         vaultState.round = 1;
     }
@@ -256,13 +262,13 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      * @notice Deposits the `asset` from msg.sender.
      * @param amount is the amount of `asset` to deposit
      */
-    function deposit(uint256 amount) external nonReentrant {
+    //  TODO deposit with ETH
+    function deposit(uint256 amount, address _depositToken) external nonReentrant {
         require(amount > 0, "!amount");
-
-        _depositFor(amount, msg.sender);
-        console.log("BEFORE SAFETRANSFERFROM");
+        require(allowedDepositTokens[_depositToken], "!_depositToken");
         // An approve() by the msg.sender is required beforehand
-        IERC20(vaultParams.asset).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), amount);
+        _depositWithToken(amount, msg.sender, _depositToken);
     }
 
     /**
@@ -271,48 +277,48 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      * @param amount is the amount of `asset` to deposit
      * @param creditor is the address that can claim/withdraw deposited amount
      */
-    function depositFor(uint256 amount, address creditor) external nonReentrant {
+    //  TODO depositFor with ETH
+    function depositFor(
+        uint256 amount,
+        address creditor,
+        address _depositToken
+    ) external nonReentrant {
         require(amount > 0, "!amount");
         require(creditor != address(0), "!creditor");
-
-        _depositFor(amount, creditor);
-
+        require(allowedDepositTokens[_depositToken], "!_depositToken");
         // An approve() by the msg.sender is required beforehand
-        IERC20(vaultParams.asset).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), amount);
+        _depositWithToken(amount, creditor, _depositToken);
+    }
+
+    function _depositWithToken(
+        uint256 amount,
+        address creditor,
+        address _depositToken
+    ) internal {
+        if (_depositToken == vaultParams.asset) {
+            _depositFor(amount, creditor);
+        } else if (_depositToken == vaultParams.collateralAsset) {
+            _depositYieldToken(amount, creditor);
+        } else {
+            IERC20(_depositToken).safeApprove(address(collateralToken), amount);
+            uint256 mintedCollateralTokens = collateralToken.deposit(_depositToken, amount);
+            _depositYieldToken(mintedCollateralTokens, creditor);
+        }
     }
 
     /**
      * @notice Deposits the `collateralToken` into the contract and mint vault shares.
      * @param amount is the amount of `collateralToken` to deposit
      */
-    function depositYieldToken(uint256 amount) external nonReentrant {
-        require(amount > 0, "!amount");
-        uint256 amountInAsset =
-            DSMath.wmul(
-                amount,
-                collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
-            );
-
-        _depositFor(amountInAsset, msg.sender);
-        IERC20(address(collateralToken)).safeTransferFrom(msg.sender, address(this), amount);
-    }
-
-    /**
-     * @notice Deposits the `collateralToken` into the contract and mint vault shares.
-     * @param amount is the amount of `collateralToken` to deposit
-     */
-    function depositYieldTokenFor(uint256 amount, address creditor) external nonReentrant {
-        require(amount > 0, "!amount");
-        require(creditor != address(0), "!creditor");
-
-        uint256 amountInAsset =
-            DSMath.wmul(
-                amount,
-                collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
-            );
+    function _depositYieldToken(uint256 amount, address creditor) internal {
+        uint256 amountInAsset = DSMath.wmul(
+            amount,
+            collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
+        );
+        console.log("_depositYieldToken ~ amountInAsset", amountInAsset);
 
         _depositFor(amountInAsset, creditor);
-        IERC20(address(collateralToken)).safeTransferFrom(msg.sender, address(this), amount);
     }
 
     /**
@@ -321,25 +327,23 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      * @param creditor is the address to receieve the deposit
      */
     function _depositFor(uint256 amount, address creditor) private {
-        console.log("_depositFor ~ _depositFor");
         uint256 currentRound = vaultState.round;
         uint256 totalWithDepositedAmount = totalBalance().add(amount);
-        console.log("amount", amount);
-        console.log("vaultParams.minimumSupply", vaultParams.minimumSupply);
         require(totalWithDepositedAmount <= vaultParams.cap, "Exceed cap");
         require(totalWithDepositedAmount >= vaultParams.minimumSupply, "Insufficient balance");
+        console.log("_depositFor ~ totalWithDepositedAmount", totalWithDepositedAmount);
+        console.log("_depositFor ~ vaultParams.minimumSupply", vaultParams.minimumSupply);
 
         emit Deposit(creditor, amount, currentRound);
 
         Vault.DepositReceipt memory depositReceipt = depositReceipts[creditor];
 
         // If we have an unprocessed pending deposit from the previous rounds, we have to process it.
-        uint256 unredeemedShares =
-            depositReceipt.getSharesFromReceipt(
-                currentRound,
-                roundPricePerShare[depositReceipt.round],
-                vaultParams.decimals
-            );
+        uint256 unredeemedShares = depositReceipt.getSharesFromReceipt(
+            currentRound,
+            roundPricePerShare[depositReceipt.round],
+            vaultParams.decimals
+        );
 
         uint256 depositAmount = amount;
         // If we have a pending deposit in the current round, we add on to the pending deposit
@@ -432,12 +436,11 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
         // Because we start with round = 1 at `initialize`
         uint256 currentRound = vaultState.round;
 
-        uint256 unredeemedShares =
-            depositReceipt.getSharesFromReceipt(
-                currentRound,
-                roundPricePerShare[depositReceipt.round],
-                vaultParams.decimals
-            );
+        uint256 unredeemedShares = depositReceipt.getSharesFromReceipt(
+            currentRound,
+            roundPricePerShare[depositReceipt.round],
+            vaultParams.decimals
+        );
 
         console.log("_redeem ~ unredeemedShares", unredeemedShares);
         numShares = isMax ? unredeemedShares : numShares;
@@ -527,8 +530,11 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
         withdrawals[msg.sender].shares = 0;
         vaultState.queuedWithdrawShares = uint128(uint256(vaultState.queuedWithdrawShares).sub(withdrawalShares));
 
-        uint256 withdrawAmount =
-            ShareMath.sharesToAsset(withdrawalShares, roundPricePerShare[withdrawalRound], vaultParams.decimals);
+        uint256 withdrawAmount = ShareMath.sharesToAsset(
+            withdrawalShares,
+            roundPricePerShare[withdrawalRound],
+            vaultParams.decimals
+        );
 
         emit Withdraw(msg.sender, withdrawAmount, withdrawalShares);
 
@@ -591,20 +597,18 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
             "rollToNextOption ~ collateralToken.balanceOf(address(this))",
             collateralToken.balanceOf(address(this))
         );
-        uint256 lockedBalanceInCollateralToken =
-            collateralToken.balanceOf(address(this)).sub(
-                DSMath.wdiv(
-                    queuedWithdrawAmount.add(queuedWithdrawAmount.mul(COLLATERAL_WITHDRAWAL_BUFFER).div(10000)),
-                    collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
-                )
-            );
+        uint256 lockedBalanceInCollateralToken = collateralToken.balanceOf(address(this)).sub(
+            DSMath.wdiv(
+                queuedWithdrawAmount.add(queuedWithdrawAmount.mul(COLLATERAL_WITHDRAWAL_BUFFER).div(10000)),
+                collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
+            )
+        );
 
         console.log("rollToNextOption ~ lockedBalanceInCollateralToken", lockedBalanceInCollateralToken);
-        uint256 lockedBalanceInAsset =
-            DSMath.wmul(
-                lockedBalanceInCollateralToken,
-                collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
-            );
+        uint256 lockedBalanceInAsset = DSMath.wmul(
+            lockedBalanceInCollateralToken,
+            collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
+        );
 
         collateralToken.transfer(msg.sender, lockedBalanceInCollateralToken);
 
@@ -628,8 +632,7 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
             uint256 mintShares,
             uint256 performanceFeeInAsset,
             uint256 totalVaultFee
-        ) =
-            CollateralVaultLifecycle.rollover(
+        ) = CollateralVaultLifecycle.rollover(
                 vaultState,
                 CollateralVaultLifecycle.RolloverParams(
                     vaultParams.decimals,
@@ -675,7 +678,14 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      * @notice Sets the next option the vault will be shorting, and closes the existing short.
      *         This allows all the users to withdraw if the next option is malicious.
      */
-    function commitAndClose() external onlyKeeper nonReentrant {
+    function commitAndClose(address premiumToken) external onlyKeeper nonReentrant {
+        // Wrap premium to neuron pool tokens
+        if (premiumToken != vaultParams.asset) {
+            uint256 premiumBalance = IERC20(premiumToken).balanceOf(address(this));
+            IERC20(premiumToken).safeApprove(address(collateralToken), premiumBalance);
+            collateralToken.deposit(premiumToken, premiumBalance);
+        }
+
         uint256 lockedAmount = vaultState.lockedAmount;
         vaultState.lastLockedAmount = uint104(lockedAmount);
         vaultState.lockedAmount = 0;
@@ -696,8 +706,12 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
      */
     function accountVaultBalance(address account) external view returns (uint256) {
         uint256 _decimals = vaultParams.decimals;
-        uint256 assetPerShare =
-            ShareMath.pricePerShare(totalSupply(), totalBalance(), vaultState.totalPending, _decimals);
+        uint256 assetPerShare = ShareMath.pricePerShare(
+            totalSupply(),
+            totalBalance(),
+            vaultState.totalPending,
+            _decimals
+        );
         return ShareMath.sharesToAsset(shares(account), assetPerShare, _decimals);
     }
 
@@ -724,12 +738,11 @@ contract NeuronCollateralVault is ReentrancyGuardUpgradeable, OwnableUpgradeable
             return (balanceOf(account), 0);
         }
 
-        uint256 unredeemedShares =
-            depositReceipt.getSharesFromReceipt(
-                vaultState.round,
-                roundPricePerShare[depositReceipt.round],
-                vaultParams.decimals
-            );
+        uint256 unredeemedShares = depositReceipt.getSharesFromReceipt(
+            vaultState.round,
+            roundPricePerShare[depositReceipt.round],
+            vaultParams.decimals
+        );
 
         return (balanceOf(account), unredeemedShares);
     }

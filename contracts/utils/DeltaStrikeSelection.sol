@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {IPriceOracle} from "../interfaces/IPriceOracle.sol";
@@ -50,8 +50,8 @@ contract DeltaStrikeSelection is Ownable {
         volatilityOracle = IVolatilityOracle(IOptionsPremiumPricer(_optionsPremiumPricer).volatilityOracle());
         // ex: delta = 7500 (.75)
         delta = _delta;
-        uint256 _assetOracleMultiplier =
-            10**IPriceOracle(IOptionsPremiumPricer(_optionsPremiumPricer).priceOracle()).decimals();
+        uint256 _assetOracleMultiplier = 10 **
+            IPriceOracle(IOptionsPremiumPricer(_optionsPremiumPricer).priceOracle()).decimals();
 
         // ex: step = 1000
         step = _step.mul(_assetOracleMultiplier);
@@ -86,32 +86,31 @@ contract DeltaStrikeSelection is Ownable {
         //   with certain margin of error
         //        return strike price
 
-        uint256 strike =
-            isPut ? assetPrice.sub(assetPrice % step).sub(step) : assetPrice.add(step - (assetPrice % step)).add(step);
+        uint256 strike = isPut
+            ? assetPrice.sub(assetPrice % step).sub(step)
+            : assetPrice.add(step - (assetPrice % step)).add(step);
         uint256 targetDelta = isPut ? DELTA_MULTIPLIER.sub(delta) : delta;
         uint256 prevDelta = DELTA_MULTIPLIER;
 
         while (true) {
-            uint256 currDelta =
-                optionsPremiumPricer.getOptionDelta(
-                    assetPrice.mul(ORACLE_PRICE_MULTIPLIER).div(assetOracleMultiplier),
-                    strike,
-                    annualizedVol,
-                    expiryTimestamp
-                );
+            uint256 currDelta = optionsPremiumPricer.getOptionDelta(
+                assetPrice.mul(ORACLE_PRICE_MULTIPLIER).div(assetOracleMultiplier),
+                strike,
+                annualizedVol,
+                expiryTimestamp
+            );
             //  If the current delta is between the previous
             //  strike price delta and current strike price delta
             //  then we are done
-            bool foundTargetStrikePrice =
-                isPut
-                    ? targetDelta >= prevDelta && targetDelta <= currDelta
-                    : targetDelta <= prevDelta && targetDelta >= currDelta;
+            bool foundTargetStrikePrice = isPut
+                ? targetDelta >= prevDelta && targetDelta <= currDelta
+                : targetDelta <= prevDelta && targetDelta >= currDelta;
 
             if (foundTargetStrikePrice) {
                 uint256 finalDelta = _getBestDelta(prevDelta, currDelta, targetDelta, isPut);
                 uint256 finalStrike = _getBestStrike(finalDelta, prevDelta, strike, isPut);
                 require(isPut ? finalStrike <= assetPrice : finalStrike >= assetPrice, "Invalid strike price");
-                // make decimals consistent with oToken strike price decimals (10 ** 8)
+                // make decimals consistent with onToken strike price decimals (10 ** 8)
                 return (finalStrike.mul(ORACLE_PRICE_MULTIPLIER).div(assetOracleMultiplier), finalDelta);
             }
 

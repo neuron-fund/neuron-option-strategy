@@ -132,7 +132,7 @@ export const WSTETH_PRICER = '0x4661951D252993AFa69b36bcc7Ba7da4a48813bF'
 /**
  * Gamma Protocol
  */
-export const OTOKEN_FACTORY = {
+export const ON_TOKEN_FACTORY = {
   [CHAINID.ETH_MAINNET]: '0x17c8ad9758B3dc5523b4E7Cb8A11AFF8f48E7A80',
 }
 
@@ -171,11 +171,7 @@ export const ORACLE_LOCKING_PERIOD = 300
  * DEX Routers and Factories
  */
 export const DEX_ROUTER = {
-  [CHAINID.ETH_MAINNET]: '0xE592427A0AEce92De3Edee1F18E0157C05861564', // Uniswap V3 Router
-}
-
-export const DEX_FACTORY = {
-  [CHAINID.ETH_MAINNET]: '0x1F98431c8aD98523631AE4a59f267346ea31F984', // Uniswap V3 Factory
+  [CHAINID.ETH_MAINNET]: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Uniswap V2 Router
 }
 
 /**
@@ -235,11 +231,11 @@ export const MANUAL_VOL_ORACLE = {
  * Swap Pools
  */
 
-export const ETH_USDC_POOL = {
+export const UNIV3_ETH_USDC_POOL = {
   [CHAINID.ETH_MAINNET]: '0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8', // NOTE: Uniswap v3 - USDC / ETH 0.3%
 }
 
-export const WBTC_USDC_POOL = {
+export const UNIV3_WBTC_USDC_POOL = {
   [CHAINID.ETH_MAINNET]: '0x99ac8ca7087fa4a2a1fb6357269965a2014abc35', // NOTE: Uniswap v3 - WBTC / ETH 0.3%
 }
 

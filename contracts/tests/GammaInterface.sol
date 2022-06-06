@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 interface IGammaWhitelist {
     function whitelistCollaterals(address[] calldata _collaterals) external;

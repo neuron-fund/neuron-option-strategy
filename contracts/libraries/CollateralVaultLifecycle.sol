@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Vault} from "./Vault.sol";
 import {ShareMath} from "./ShareMath.sol";
-import {IOtokenFactory, IOtoken, IController, Actions, MarginVault} from "../interfaces/GammaInterface.sol";
+import {IONtokenFactory, IONtoken, IController, Actions, MarginVault} from "../interfaces/GammaInterface.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
 import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
@@ -64,21 +64,23 @@ library CollateralVaultLifecycle {
 
         uint256 balanceForVaultFees;
         {
-            uint256 pricePerShareBeforeFee =
-                ShareMath.pricePerShare(params.currentShareSupply, currentBalance, pendingAmount, params.decimals);
+            uint256 pricePerShareBeforeFee = ShareMath.pricePerShare(
+                params.currentShareSupply,
+                currentBalance,
+                pendingAmount,
+                params.decimals
+            );
 
-            uint256 queuedWithdrawBeforeFee =
-                params.currentShareSupply > 0
-                    ? ShareMath.sharesToAsset(queuedWithdrawShares, pricePerShareBeforeFee, params.decimals)
-                    : 0;
+            uint256 queuedWithdrawBeforeFee = params.currentShareSupply > 0
+                ? ShareMath.sharesToAsset(queuedWithdrawShares, pricePerShareBeforeFee, params.decimals)
+                : 0;
 
             // Deduct the difference between the newly scheduled withdrawals
             // and the older withdrawals
             // so we can charge them fees before they leave
-            uint256 withdrawAmountDiff =
-                queuedWithdrawBeforeFee > params.lastQueuedWithdrawAmount
-                    ? queuedWithdrawBeforeFee.sub(params.lastQueuedWithdrawAmount)
-                    : 0;
+            uint256 withdrawAmountDiff = queuedWithdrawBeforeFee > params.lastQueuedWithdrawAmount
+                ? queuedWithdrawBeforeFee.sub(params.lastQueuedWithdrawAmount)
+                : 0;
 
             balanceForVaultFees = currentBalance.sub(queuedWithdrawBeforeFee).add(withdrawAmountDiff);
         }

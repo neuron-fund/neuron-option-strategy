@@ -92,7 +92,6 @@ library VaultLifecycle {
         address premiumCalcToken = isPut ? _usdc : underlying;
         if (premiumCalcToken != closePremiumParams.auctionBiddingToken) {
             // get the black scholes premium of the option
-            console.log("BEFORE getONTokenPremiumInToken");
             premium = GnosisAuction.getONTokenPremiumInToken(
                 closePremiumParams.oracle,
                 onTokenAddress,
@@ -183,15 +182,12 @@ library VaultLifecycle {
         // An onToken's collateralAsset is the vault's `asset`
         // So in the context of performing Opyn short operations we call them collateralAsset
         IONtoken onToken = IONtoken(onTokenAddress);
-        // TODO whats cheaper to call external getCollateralAssets
-        // or provide vaultParams storage argument to fucntion and read from it?
         address[] memory collateralAssets = onToken.getCollateralAssets();
 
         for (uint256 i = 0; i < collateralAssets.length; i++) {
             // double approve to fix non-compliant ERC20s
             IERC20 collateralToken = IERC20(collateralAssets[i]);
             collateralToken.safeApproveNonCompliant(marginPool, depositAmounts[i]);
-            console.log(")externalreturns ~ depositAmounts[i]", depositAmounts[i]);
         }
 
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](3);
@@ -228,11 +224,9 @@ library VaultLifecycle {
             mintAmount, // amount
             "" //data
         );
-        console.log("controller", address(controller));
         controller.operate(actions);
 
         uint256 mintedAmount = onToken.balanceOf(address(this));
-        console.log(")externalreturns ~ mintedAmount", mintedAmount);
 
         return mintedAmount;
     }
@@ -296,37 +290,27 @@ library VaultLifecycle {
         address currentOption
     ) external returns (uint256[] memory) {
         uint256 numONTokensToBurn = IERC20(currentOption).balanceOf(address(this));
-        console.log("burnONtokens ~ numONTokensToBurn", numONTokensToBurn);
         require(numONTokensToBurn > 0, "No onTokens to burn");
 
         IController controller = IController(gammaController);
 
         // gets the currently active vault ID
         uint256 vaultID = controller.accountVaultCounter(address(this));
-        console.log(")externalreturns ~ vaultID", vaultID);
 
         (MarginVault.Vault memory gammaVault, ) = controller.getVaultWithDetails(address(this), vaultID);
-        console.log(")externalreturns ~ gammaVault shortONtoken", gammaVault.shortONtoken);
 
         require(gammaVault.shortONtoken != address(0), "No short");
-        console.log(")externalreturns ~ gammaVault.shortONtoken", gammaVault.shortONtoken);
 
         uint256[] memory startCollateralBalances = getCollateralBalances(vaultParams);
-        console.log(")externalreturns ~ startCollateralBalances", startCollateralBalances[0]);
         // Burning `amount` of onTokens from the neuron vault,
         // then withdrawing the corresponding collateral amount from the vault
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](2);
 
-        // TODO use array initialization like these everywhere
-        console.log(")externalreturns ~ shortONtokenAddressActionArg");
         address[] memory shortONtokenAddressActionArg = new address[](1);
-        console.log(")externalreturns ~ shortONtokenAddressActionArg", shortONtokenAddressActionArg[0]);
         shortONtokenAddressActionArg[0] = gammaVault.shortONtoken;
-        console.log(")externalreturns ~ shortONtokenAddressActionArg[0] ", shortONtokenAddressActionArg[0]);
 
         uint256[] memory burnAmountActionArg = new uint256[](1);
         burnAmountActionArg[0] = numONTokensToBurn;
-        console.log(")externalreturns ~ burnAmountActionArg[0]", burnAmountActionArg[0]);
 
         actions[0] = Actions.ActionArgs({
             actionType: uint8(Actions.ActionType.BurnShortOption),
@@ -351,7 +335,6 @@ library VaultLifecycle {
         controller.operate(actions);
 
         uint256[] memory endCollateralBalances = getCollateralBalances(vaultParams);
-        console.log(")externalreturns ~ endCollateralBalances", endCollateralBalances[0]);
 
         return getArrayOfDiffs(endCollateralBalances, startCollateralBalances);
     }
@@ -359,12 +342,9 @@ library VaultLifecycle {
     function getCollateralBalances(Vault.VaultParams storage vaultParams) internal view returns (uint256[] memory) {
         address[] memory collateralAssets = vaultParams.collateralAssets;
         uint256 collateralsLength = collateralAssets.length;
-        console.log("getCollateralBalances ~ collateralsLength", collateralsLength);
         uint256[] memory collateralBalances = new uint256[](collateralsLength);
         for (uint256 i = 0; i < collateralsLength; i++) {
-            console.log("getCollateralBalances ~ collateralAssets[i]", collateralAssets[i]);
             collateralBalances[i] = IERC20(collateralAssets[i]).balanceOf(address(this));
-            console.log("getCollateralBalances ~ collateralBalances[i]", collateralBalances[i]);
         }
         return collateralBalances;
     }
@@ -372,11 +352,7 @@ library VaultLifecycle {
     function getArrayOfDiffs(uint256[] memory a, uint256[] memory b) internal view returns (uint256[] memory) {
         require(a.length == b.length, "Arrays must be of equal length");
         uint256[] memory diffs = new uint256[](a.length);
-        console.log("getArrayOfDiffs ~ a.length", a.length);
         for (uint256 i = 0; i < a.length; i++) {
-            console.log("getArrayOfDiffs ~ b[i]", b[i]);
-            console.log("getArrayOfDiffs ~ a[i]", a[i]);
-            console.log("getArrayOfDiffs ~ a[i].sub(b[i])", a[i].sub(b[i]));
             diffs[i] = a[i].sub(b[i]);
         }
         return diffs;
@@ -472,9 +448,7 @@ library VaultLifecycle {
         uint256 balance = IERC20(tokenIn).balanceOf(address(this));
         // TODO neuron can we get rid of approve zero?
         if (balance > 0) {
-            console.log("swap");
             UniswapRouter.swap(address(this), tokenIn, tokenOut, balance, minAmountOut, router, weth);
-            console.log("swap after");
         }
     }
 

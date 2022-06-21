@@ -1,6 +1,7 @@
+import { parseUnits } from '@ethersproject/units'
 import { BigNumber } from 'ethers'
 import { CHAINLINK_WETH_PRICER_NEW, CHAINLINK_WETH_PRICER, CHAINID } from '../constants/constants'
-import { WETH, USDC, DAI, USDT, CURVE_3CRV_POOL, CURVE_3CRV_LP_TOKEN } from '../constants/externalAddresses'
+import { WETH, USDC } from '../constants/externalAddresses'
 import { getDeltaStep } from './utils'
 import { VaultTestParams } from './vault'
 
@@ -27,6 +28,8 @@ export const NeuronEthThetaVaultPutTestParams: VaultTestParams = {
   tokenDecimals: 18,
   isPut: false,
   auctionBiddingToken: USDC,
+  // TODO make cap for each vault
+  collateralVaultCap: parseUnits('50000', 18),
 }
 
 export const testsParams: VaultTestParams[] = [NeuronEthThetaVaultPutTestParams]

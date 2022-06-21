@@ -122,6 +122,7 @@ export type VaultTestParams = {
   isPut: boolean
   /** isUsdcAuction - Boolean flag whether auction is denominated in USDC */
   auctionBiddingToken: string
+  collateralVaultCap: BigNumber
 }
 
 export async function initiateVault(params: VaultTestParams) {
@@ -315,6 +316,7 @@ export async function initiateVault(params: VaultTestParams) {
 
   collateralAssetsContracts = []
   collateralAssetsAddresses = []
+  const collateralUnwrappedAssets: string[] = []
   collateralVaults = []
   const collateralVaultDeployArgs = [WETH, USDC]
   for (const [i, neuronPoolName] of params.neuronPoolsNames.entries()) {
@@ -336,6 +338,7 @@ export async function initiateVault(params: VaultTestParams) {
     await setAssetPricer(neuronPoolAddress, neuronPoolPricer.address)
 
     const collateralUnwrappedAsset = await neuronPool.token()
+    collateralUnwrappedAssets.push(collateralUnwrappedAsset)
     const neuronPoolSupportedTokens = await neuronPool.getSupportedTokens()
     const neuronPoolBaseTokens = neuronPoolSupportedTokens.filter(x => x !== collateralUnwrappedAsset)
 
@@ -354,8 +357,7 @@ export async function initiateVault(params: VaultTestParams) {
         neuronPoolAddress,
         underlying,
         minimumSupply,
-        // TODO add caps in params
-        parseUnits('50000', 18),
+        params.collateralVaultCap,
       ],
       neuronPoolBaseTokens,
     ]
@@ -567,5 +569,7 @@ export async function initiateVault(params: VaultTestParams) {
     getCurrentOptionExpiry,
     deltaSecondOption: params.deltaSecondOption,
     expectedMintAmount: params.expectedMintAmount,
+    collateralUnwrappedAssets,
+    collateralVaultCap: params.collateralVaultCap,
   }
 }

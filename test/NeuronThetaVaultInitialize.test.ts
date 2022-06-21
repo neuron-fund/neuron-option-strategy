@@ -2,7 +2,6 @@ import { ethers } from 'hardhat'
 
 import { expect } from 'chai'
 import { BigNumber, constants } from 'ethers'
-import { parseUnits } from 'ethers/lib/utils'
 import {
   GAMMA_CONTROLLER,
   MARGIN_POOL,
@@ -15,6 +14,7 @@ import { assert } from '../helpers/assertions'
 import { USDC, WETH } from '../constants/externalAddresses'
 import { FEE_SCALING, OPTION_DELAY, WEEKS_PER_YEAR } from '../helpers/vault'
 import { runVaultTests } from '../helpers/runVaultTests'
+import { AdminUpgradeabilityProxy__factory } from '../typechain-types'
 
 const chainId = CHAINID.ETH_MAINNET
 
@@ -28,7 +28,6 @@ runVaultTests('#initialize', async function (params) {
     tokenDecimals,
     minimumSupply,
     underlying: asset,
-    collateralUnwrappedAsset,
     premiumDiscount,
     managementFee,
     performanceFee,
@@ -44,6 +43,9 @@ runVaultTests('#initialize', async function (params) {
     auctionDuration,
     auctionBiddingToken,
     userSigner,
+    collateralUnwrappedAssets,
+    collateralVaultCap,
+    adminSigner,
   } = params
 
   const NeuronThetaVault = await ethers.getContractFactory('NeuronThetaVault', {
@@ -61,26 +63,31 @@ runVaultTests('#initialize', async function (params) {
     GNOSIS_EASY_AUCTION[chainId],
     DEX_ROUTER[chainId],
   ] as const
-  const testVault = await NeuronThetaVault.deploy(...vaultDeployArgs)
+  const testVaultLogic = await NeuronThetaVault.deploy(...vaultDeployArgs)
+  const initializeTestVault = async initializeArgs => {
+    const AdminUpgradeabilityProxy = (await ethers.getContractFactory(
+      'TransparentUpgradeableProxy',
+      adminSigner
+    )) as AdminUpgradeabilityProxy__factory
+    const initBytes = testVaultLogic.interface.encodeFunctionData('initialize', initializeArgs)
+    return AdminUpgradeabilityProxy.deploy(testVaultLogic.address, await adminSigner.getAddress(), initBytes)
+  }
 
   return () => {
     it('initializes with correct values', async function () {
-      for (const collateralVault of collateralVaults) {
+      for (const [i, collateralVault] of collateralVaults.entries()) {
         const [isPut, decimals, assetFromContract, , underlyingFromContract, minimumSupply, cap] =
           await collateralVault.getVaultParams()
         assert.equal(decimals, tokenDecimals)
-        assert.equal(assetFromContract, collateralUnwrappedAsset)
+        assert.equal(assetFromContract, collateralUnwrappedAssets[i])
         assert.equal(asset, underlyingFromContract)
         assert.equal(await vault.WETH(), WETH)
         assert.equal(await vault.USDC(), USDC)
         assert.bnEqual(minimumSupply, BigNumber.from(params.minimumSupply))
         assert.equal(isPut, params.isPut)
 
-        assert.bnEqual(cap, parseUnits('500', tokenDecimals > 18 ? tokenDecimals : 18))
-        assert.equal(
-          (await collateralVault.cap()).toString(),
-          parseUnits('500', tokenDecimals > 18 ? tokenDecimals : 18).toString()
-        )
+        assert.bnEqual(cap, collateralVaultCap)
+        assert.equal((await collateralVault.cap()).toString(), collateralVaultCap.toString())
         assert.equal(await collateralVault.owner(), owner)
         assert.equal(await collateralVault.keeper(), vault.address)
         assert.equal(await collateralVault.feeRecipient(), feeRecipient)
@@ -91,6 +98,7 @@ runVaultTests('#initialize', async function (params) {
         assert.equal((await collateralVault.performanceFee()).toString(), performanceFee.toString())
         assert.bnEqual(await collateralVault.totalPending(), BigNumber.from(0))
       }
+
       assert.equal(await vault.owner(), owner)
       assert.equal(await vault.keeper(), keeper)
       assert.equal(await vault.feeRecipient(), feeRecipient)
@@ -99,10 +107,10 @@ runVaultTests('#initialize', async function (params) {
         managementFee.mul(FEE_SCALING).div(WEEKS_PER_YEAR).toString()
       )
       assert.equal((await vault.performanceFee()).toString(), performanceFee.toString())
-      const [isPut, decimals, assetFromContract, , underlyingFromContract, ,] = await vault.getVaultParams()
+      const [isPut, decimals, collateralAssetsFromContract, underlyingFromContract] = await vault.getVaultParams()
       assert.equal(await decimals, tokenDecimals)
       assert.equal(decimals, tokenDecimals)
-      assert.equal(assetFromContract, collateralUnwrappedAsset)
+      collateralAssetsAddresses.forEach((x, i) => assert.equal(x, collateralAssetsFromContract[i]))
       assert.equal(asset, underlyingFromContract)
       assert.equal(await vault.WETH(), WETH)
       assert.equal(await vault.USDC(), USDC)
@@ -113,7 +121,7 @@ runVaultTests('#initialize', async function (params) {
       assert.equal(await vault.strikeSelection(), strikeSelection.address)
       assert.bnEqual(await vault.auctionDuration(), BigNumber.from(auctionDuration))
     })
-
+    // TODO same tests for NeuronCollateralVault
     it('cannot be initialized twice', async function () {
       await expect(
         vault.initialize(
@@ -134,7 +142,6 @@ runVaultTests('#initialize', async function (params) {
           {
             isPut,
             decimals: tokenDecimals,
-            asset: collateralUnwrappedAsset,
             collateralAssets: collateralAssetsAddresses,
             underlying: asset,
             collateralVaults: collateralVaultsAddresses,
@@ -144,7 +151,7 @@ runVaultTests('#initialize', async function (params) {
     })
     it('reverts when initializing with 0 owner', async function () {
       await expect(
-        testVault.initialize(
+        initializeTestVault([
           constants.AddressZero,
           keeper,
           feeRecipient,
@@ -155,25 +162,15 @@ runVaultTests('#initialize', async function (params) {
           optionsPremiumPricer.address,
           strikeSelection.address,
           premiumDiscount,
-          {
-            auctionDuration,
-            auctionBiddingToken,
-          },
-          {
-            isPut,
-            decimals: tokenDecimals,
-            asset: collateralUnwrappedAsset,
-            collateralAssets: collateralAssetsAddresses,
-            underlying: asset,
-            collateralVaults: collateralVaultsAddresses,
-          }
-        )
+          [auctionDuration, auctionBiddingToken],
+          [isPut, tokenDecimals, collateralAssetsAddresses, asset, collateralVaultsAddresses],
+        ])
       ).to.be.revertedWith('!owner')
     })
     it('reverts when initializing with 0 keeper', async function () {
       // TODO neuron same test on initialize for NeuronCollateralVault
       await expect(
-        testVault.initialize(
+        initializeTestVault([
           owner,
           constants.AddressZero,
           feeRecipient,
@@ -184,24 +181,14 @@ runVaultTests('#initialize', async function (params) {
           optionsPremiumPricer.address,
           strikeSelection.address,
           premiumDiscount,
-          {
-            auctionDuration,
-            auctionBiddingToken,
-          },
-          {
-            isPut,
-            decimals: tokenDecimals,
-            asset: collateralUnwrappedAsset,
-            collateralAssets: collateralAssetsAddresses,
-            underlying: asset,
-            collateralVaults: collateralVaultsAddresses,
-          }
-        )
+          [auctionDuration, auctionBiddingToken],
+          [isPut, tokenDecimals, collateralAssetsAddresses, asset, collateralVaultsAddresses],
+        ])
       ).to.be.revertedWith('!keeper')
     })
     it('reverts when initializing with 0 feeRecipient', async function () {
       await expect(
-        testVault.initialize(
+        initializeTestVault([
           owner,
           keeper,
           constants.AddressZero,
@@ -212,22 +199,15 @@ runVaultTests('#initialize', async function (params) {
           optionsPremiumPricer.address,
           strikeSelection.address,
           premiumDiscount,
-          { auctionDuration, auctionBiddingToken },
-          {
-            isPut,
-            decimals: tokenDecimals,
-            asset: collateralUnwrappedAsset,
-            collateralAssets: collateralAssetsAddresses,
-            underlying: asset,
-            collateralVaults: collateralVaultsAddresses,
-          }
-        )
+          [auctionDuration, auctionBiddingToken],
+          [isPut, tokenDecimals, collateralAssetsAddresses, asset, collateralVaultsAddresses],
+        ])
       ).to.be.revertedWith('!feeRecipient')
     })
     // TODO transform this test for NeuronCollateralVault cause it has cup only now
     //it("reverts when initializing with 0 initCap", async function () {
     //   await expect(
-    //     testVault.initialize(
+    //     initializeTestVault([
     //       [
     //         owner,
     //         keeper,
@@ -250,12 +230,12 @@ runVaultTests('#initialize', async function (params) {
     //         minimumSupply,
     //         0,
     //       ]
-    //     )
+    //     ])
     //   ).to.be.revertedWith("!cap");
     // });
-    it('reverts when asset is 0x', async function () {
+    it('reverts when collateralAssets is 0 length array', async function () {
       await expect(
-        testVault.initialize(
+        initializeTestVault([
           owner,
           keeper,
           feeRecipient,
@@ -266,22 +246,40 @@ runVaultTests('#initialize', async function (params) {
           optionsPremiumPricer.address,
           strikeSelection.address,
           premiumDiscount,
-          { auctionDuration, auctionBiddingToken },
-          {
+          [auctionDuration, auctionBiddingToken],
+          [isPut, tokenDecimals, [], asset, collateralVaultsAddresses],
+        ])
+      ).to.be.revertedWith('!collateralAssets')
+    })
+
+    it('reverts when one of collateralAssets is 0x', async function () {
+      await expect(
+        initializeTestVault([
+          owner,
+          keeper,
+          feeRecipient,
+          managementFee,
+          performanceFee,
+          tokenName,
+          tokenSymbol,
+          optionsPremiumPricer.address,
+          strikeSelection.address,
+          premiumDiscount,
+          [auctionDuration, auctionBiddingToken],
+          [
             isPut,
-            decimals: tokenDecimals,
-            asset: constants.AddressZero,
-            collateralAssets: collateralAssetsAddresses,
-            underlying: asset,
-            collateralVaults: collateralVaultsAddresses,
-          }
-        )
-      ).to.be.revertedWith('!asset')
+            tokenDecimals,
+            [constants.AddressZero, collateralAssetsAddresses[0]],
+            asset,
+            collateralVaultsAddresses,
+          ],
+        ])
+      ).to.be.revertedWith('zero address collateral asset')
     })
 
     it('reverts when underlying is 0x', async function () {
       await expect(
-        testVault.initialize(
+        initializeTestVault([
           owner,
           keeper,
           feeRecipient,
@@ -292,16 +290,9 @@ runVaultTests('#initialize', async function (params) {
           optionsPremiumPricer.address,
           strikeSelection.address,
           premiumDiscount,
-          { auctionDuration, auctionBiddingToken },
-          {
-            isPut,
-            decimals: tokenDecimals,
-            asset: collateralUnwrappedAsset,
-            collateralAssets: collateralAssetsAddresses,
-            underlying: constants.AddressZero,
-            collateralVaults: collateralVaultsAddresses,
-          }
-        )
+          [auctionDuration, auctionBiddingToken],
+          [isPut, tokenDecimals, collateralAssetsAddresses, constants.AddressZero, collateralVaultsAddresses],
+        ])
       ).to.be.revertedWith('!underlying')
     })
 

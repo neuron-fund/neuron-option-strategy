@@ -68,7 +68,6 @@ library VaultLifecycle {
         address underlying = vaultParams.underlying;
         {
             uint256 expiry = getNextExpiry(closeParams.currentOption);
-            console.log("expiry", expiry);
 
             IStrikeSelection selection = IStrikeSelection(closePremiumParams.strikeSelection);
 
@@ -189,7 +188,6 @@ library VaultLifecycle {
             // double approve to fix non-compliant ERC20s
             IERC20 collateralToken = IERC20(collateralAssets[i]);
             collateralToken.safeApproveNonCompliant(marginPool, depositAmounts[i]);
-            console.log(")externalreturns ~ depositAmounts[i]", depositAmounts[i]);
         }
 
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](3);
@@ -472,7 +470,7 @@ library VaultLifecycle {
         string calldata tokenName,
         string calldata tokenSymbol,
         Vault.VaultParams calldata _vaultParams
-    ) external pure {
+    ) external view {
         require(owner != address(0), "!owner");
         require(keeper != address(0), "!keeper");
         require(feeRecipient != address(0), "!feeRecipient");
@@ -482,6 +480,11 @@ library VaultLifecycle {
         require(bytes(tokenSymbol).length > 0, "!tokenSymbol");
 
         require(_vaultParams.collateralAssets.length != 0, "!collateralAssets");
+
+        for (uint256 i = 0; i < _vaultParams.collateralAssets.length; i++) {
+            require(_vaultParams.collateralAssets[i] != address(0), "zero address collateral asset");
+        }
+
         require(_vaultParams.underlying != address(0), "!underlying");
     }
 
@@ -492,13 +495,9 @@ library VaultLifecycle {
     function getNextExpiry(address currentOption) internal view returns (uint256) {
         // uninitialized state
         if (currentOption == address(0)) {
-            console.log("getNextExpiry ~ currentOption == address(0)", currentOption == address(0));
-            console.log("getNextExpiry ~ block.timestamp", block.timestamp);
-            console.log("getNextExpiry ~ getNextFriday(block.timestamp)", getNextFriday(block.timestamp));
             return getNextFriday(block.timestamp);
         }
         uint256 currentExpiry = IONtoken(currentOption).expiryTimestamp();
-        console.log("getNextExpiry ~ currentExpiry", currentExpiry);
 
         // After options expiry if no options are written for >1 week
         // We need to give the ability continue writing options

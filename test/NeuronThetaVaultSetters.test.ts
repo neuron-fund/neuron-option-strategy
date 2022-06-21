@@ -1,9 +1,7 @@
 import { expect } from 'chai'
 import { BigNumber, constants } from 'ethers'
-import * as time from '../helpers/time'
 import { assert } from '../helpers/assertions'
-import { FEE_SCALING, initiateVault, VaultTestParams, WEEKS_PER_YEAR } from '../helpers/vault'
-import { NeuronEthThetaVaultCallTestParams } from '../helpers/testParams'
+import { FEE_SCALING, WEEKS_PER_YEAR } from '../helpers/vault'
 import { parseEther, parseUnits } from 'ethers/lib/utils'
 import { depositToNeuronPool } from '../helpers/neuronPool'
 import { CHAINID } from '../constants/constants'
@@ -22,6 +20,7 @@ runVaultTests('#setters', async function (params) {
     collateralVaults,
     tokenDecimals,
     collateralAssetsContracts,
+    collateralVaultCap,
   } = params
 
   const collateralVault = collateralVaults[0]
@@ -142,9 +141,7 @@ runVaultTests('#setters', async function (params) {
     it('should set the new cap', async function () {
       const tx = await collateralVault.connect(ownerSigner).setCap(parseEther('10'))
       assert.equal((await collateralVault.cap()).toString(), parseEther('10').toString())
-      await expect(tx)
-        .to.emit(collateralVault, 'CapSet')
-        .withArgs(parseUnits('500', tokenDecimals > 18 ? tokenDecimals : 18), parseEther('10'))
+      await expect(tx).to.emit(collateralVault, 'CapSet').withArgs(collateralVaultCap, parseEther('10'))
     })
 
     it('should revert when depositing over the cap', async function () {

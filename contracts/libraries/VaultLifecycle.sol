@@ -68,6 +68,7 @@ library VaultLifecycle {
         address underlying = vaultParams.underlying;
         {
             uint256 expiry = getNextExpiry(closeParams.currentOption);
+            console.log("expiry", expiry);
 
             IStrikeSelection selection = IStrikeSelection(closePremiumParams.strikeSelection);
 
@@ -188,6 +189,7 @@ library VaultLifecycle {
             // double approve to fix non-compliant ERC20s
             IERC20 collateralToken = IERC20(collateralAssets[i]);
             collateralToken.safeApproveNonCompliant(marginPool, depositAmounts[i]);
+            console.log(")externalreturns ~ depositAmounts[i]", depositAmounts[i]);
         }
 
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](3);
@@ -195,35 +197,35 @@ library VaultLifecycle {
         // Pass zero to mint using all deposited collaterals
         uint256[] memory mintAmount = new uint256[](1);
 
-        actions[0] = Actions.ActionArgs(
-            uint8(Actions.ActionType.OpenVault),
-            address(this), // owner
-            onTokenAddress, // optionToken
-            new address[](0), // not used
-            newVaultID, // vaultId
-            new uint256[](0), // not used
-            "" // not used
-        );
+        actions[0] = Actions.ActionArgs({
+            actionType: Actions.ActionType.OpenVault,
+            owner: address(this), // owner
+            secondAddress: onTokenAddress, // optionToken
+            assets: new address[](0), // not used
+            vaultId: newVaultID, // vaultId
+            amounts: new uint256[](0), // not used
+            data: "" // not used
+        });
 
-        actions[1] = Actions.ActionArgs(
-            uint8(Actions.ActionType.DepositCollateral),
-            address(this), // owner
-            address(this), // address to transfer from
-            new address[](0), // not used
-            newVaultID, // vaultId
-            depositAmounts, // amounts
-            "" //data
-        );
+        actions[1] = Actions.ActionArgs({
+            actionType: Actions.ActionType.DepositCollateral,
+            owner: address(this), // owner
+            secondAddress: address(this), // address to transfer from
+            assets: new address[](0), // not used
+            vaultId: newVaultID, // vaultId
+            amounts: depositAmounts, // amounts
+            data: "" //data
+        });
 
-        actions[2] = Actions.ActionArgs(
-            uint8(Actions.ActionType.MintShortOption),
-            address(this), // owner
-            address(this), // address to transfer to
-            new address[](0), // not used
-            newVaultID, // vaultId
-            mintAmount, // amount
-            "" //data
-        );
+        actions[2] = Actions.ActionArgs({
+            actionType: Actions.ActionType.MintShortOption,
+            owner: address(this), // owner
+            secondAddress: address(this), // address to transfer to
+            assets: new address[](0), // not used
+            vaultId: newVaultID, // vaultId
+            amounts: mintAmount, // amount
+            data: "" //data
+        });
         controller.operate(actions);
 
         uint256 mintedAmount = onToken.balanceOf(address(this));
@@ -260,7 +262,7 @@ library VaultLifecycle {
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
 
         actions[0] = Actions.ActionArgs(
-            uint8(uint8(Actions.ActionType.SettleVault)),
+            Actions.ActionType.SettleVault,
             address(this), // owner
             address(this), // address to transfer to
             new address[](0), // not used
@@ -313,7 +315,7 @@ library VaultLifecycle {
         burnAmountActionArg[0] = numONTokensToBurn;
 
         actions[0] = Actions.ActionArgs({
-            actionType: uint8(Actions.ActionType.BurnShortOption),
+            actionType: Actions.ActionType.BurnShortOption,
             owner: address(this), // vault owner
             secondAddress: address(0), // not used
             assets: shortONtokenAddressActionArg, // short to burn
@@ -323,7 +325,7 @@ library VaultLifecycle {
         });
 
         actions[1] = Actions.ActionArgs({
-            actionType: uint8(Actions.ActionType.WithdrawCollateral),
+            actionType: Actions.ActionType.WithdrawCollateral,
             owner: address(this), // vault owner
             secondAddress: address(this), // withdraw to
             assets: new address[](0), // not used
@@ -490,9 +492,13 @@ library VaultLifecycle {
     function getNextExpiry(address currentOption) internal view returns (uint256) {
         // uninitialized state
         if (currentOption == address(0)) {
+            console.log("getNextExpiry ~ currentOption == address(0)", currentOption == address(0));
+            console.log("getNextExpiry ~ block.timestamp", block.timestamp);
+            console.log("getNextExpiry ~ getNextFriday(block.timestamp)", getNextFriday(block.timestamp));
             return getNextFriday(block.timestamp);
         }
         uint256 currentExpiry = IONtoken(currentOption).expiryTimestamp();
+        console.log("getNextExpiry ~ currentExpiry", currentExpiry);
 
         // After options expiry if no options are written for >1 week
         // We need to give the ability continue writing options

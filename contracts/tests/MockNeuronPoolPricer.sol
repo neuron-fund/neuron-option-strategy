@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
-import {GammaOracleInterface} from "../interfaces/GammaOracleInterface.sol";
+import {IOracle} from "../interfaces/GammaInterface.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {MockNeuronPool} from "./MockNeuronPool.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -16,7 +16,7 @@ contract MockNeuronPoolPricer {
     using SafeMath for uint256;
 
     /// @notice oracle address
-    GammaOracleInterface public oracle;
+    IOracle public oracle;
 
     /// @notice nToken that this pricer will a get price for
     MockNeuronPool public nToken;
@@ -40,7 +40,7 @@ contract MockNeuronPoolPricer {
 
         nToken = MockNeuronPool(_nToken);
         underlying = IERC20Detailed(_underlying);
-        oracle = GammaOracleInterface(_oracle);
+        oracle = IOracle(_oracle);
     }
 
     /**

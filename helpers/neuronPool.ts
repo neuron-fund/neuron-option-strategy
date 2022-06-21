@@ -21,11 +21,11 @@ export async function prepareNeuronPool(chainId: number, neuronPool: INeuronPool
 
 export async function depositToNeuronPool(
   chainId: number,
-  neuronPool: Contract,
+  neuronPool: INeuronPool,
   depositor: SignerWithAddress,
   amount: number | BigNumber
 ) {
-  const assetAddress = await neuronPool.connect(depositor).asset()
+  const assetAddress = await neuronPool.token()
   const assetContract = await ethers.getContractAt('IERC20Detailed', assetAddress)
   const assetDecimals = await assetContract.connect(depositor).decimals()
   const depositAmount = BigNumber.isBigNumber(amount)
@@ -33,5 +33,5 @@ export async function depositToNeuronPool(
     : ethers.utils.parseUnits(amount.toString(), assetDecimals)
   await getAsset(chainId, assetAddress, depositAmount, depositor.address)
   await assetContract.connect(depositor).approve(neuronPool.address, depositAmount)
-  await neuronPool.connect(depositor).deposit(depositAmount, assetContract.address)
+  await neuronPool.connect(depositor).deposit(assetContract.address, depositAmount)
 }

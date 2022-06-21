@@ -33,7 +33,6 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaVaultStorage {
      ***********************************************/
 
     /// @notice onTokenFactory is the factory contract used to spawn onTokens. Used to lookup onTokens.
-    // TODO neuron do not make this immutable
     address public immutable ON_TOKEN_FACTORY;
 
     // The minimum duration for an option auction.

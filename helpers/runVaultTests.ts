@@ -12,21 +12,30 @@ export function runVaultTests(describeTitle: string, testsCallback: RunVaultTest
 
     before(async () => {
       beforeSnapshotId = await takeSnapshot()
+      process.on('exit', async () => await revertToSnapShot(beforeSnapshotId))
+
       for (const testParam of testsParams) {
-        const initParams = await initiateVault(testParam)
-        const tests = await testsCallback(initParams)
-        const initSnapshotId = await takeSnapshot()
+        let initParams: InitVaultReturn
+        let tests: () => void
+        try {
+          initParams = await initiateVault(testParam)
+          tests = await testsCallback(initParams)
+        } catch (e) {
+          await revertToSnapShot(beforeSnapshotId)
+          throw e
+        }
+        let initSnapshotId = await takeSnapshot()
 
         describe(`${describeTitle}: ${testParam.name}`, () => {
-          afterEach(async () => {
-            await revertToSnapShot(initSnapshotId)
-          })
-
+          tests()
           after(async () => {
             await revertToSnapShot(beforeSnapshotId)
           })
-
-          tests()
+          afterEach(async () => {
+            await revertToSnapShot(initSnapshotId)
+            // If we dont take snapshot again it wont revert second time for some reason
+            initSnapshotId = await takeSnapshot()
+          })
         })
       }
     })

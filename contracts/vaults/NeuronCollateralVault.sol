@@ -296,6 +296,7 @@ contract NeuronCollateralVault is
         address creditor,
         address _depositToken
     ) internal {
+        // TODO remove deposit with asset
         if (_depositToken == vaultParams.asset) {
             _depositFor(amount, creditor);
         } else if (_depositToken == vaultParams.collateralAsset) {
@@ -327,8 +328,9 @@ contract NeuronCollateralVault is
      * @param creditor is the address to receieve the deposit
      */
     function _depositFor(uint256 amount, address creditor) private {
+        console.log("_depositFor ~ amount", amount);
         uint256 currentRound = vaultState.round;
-        uint256 totalWithDepositedAmount = totalBalance().add(amount);
+        uint256 totalWithDepositedAmount = totalBalance();
         require(totalWithDepositedAmount <= vaultParams.cap, "Exceed cap");
         require(totalWithDepositedAmount >= vaultParams.minimumSupply, "Insufficient balance");
         console.log("_depositFor ~ totalWithDepositedAmount", totalWithDepositedAmount);
@@ -506,8 +508,8 @@ contract NeuronCollateralVault is
     /**
      * @notice Completes a scheduled withdrawal from a past round. Uses finalized pps for the round
      */
-    function completeWithdraw() external nonReentrant {
-        uint256 withdrawAmount = _completeWithdraw();
+    function completeWithdraw(address _withdrawToken) external nonReentrant {
+        uint256 withdrawAmount = _completeWithdraw(_withdrawToken);
         lastQueuedWithdrawAmount = uint128(uint256(lastQueuedWithdrawAmount).sub(withdrawAmount));
     }
 
@@ -515,7 +517,8 @@ contract NeuronCollateralVault is
      * @notice Completes a scheduled withdrawal from a past round. Uses finalized pps for the round
      * @return withdrawAmount the current withdrawal amount
      */
-    function _completeWithdraw() internal returns (uint256) {
+    //  TODO add withdrawal token of choice
+    function _completeWithdraw(address _withdrawToken) internal returns (uint256) {
         Vault.Withdrawal storage withdrawal = withdrawals[msg.sender];
 
         uint256 withdrawalShares = withdrawal.shares;
@@ -535,21 +538,23 @@ contract NeuronCollateralVault is
             roundPricePerShare[withdrawalRound],
             vaultParams.decimals
         );
+        require(withdrawAmount > 0, "!withdrawAmount");
 
         emit Withdraw(msg.sender, withdrawAmount, withdrawalShares);
 
         _burn(address(this), withdrawalShares);
 
-        NeuronPoolUtils.unwrapYieldToken(
-            withdrawAmount,
-            vaultParams.asset,
-            address(collateralToken),
-            COLLATERAL_WITHDRAWAL_BUFFER
-        );
-
-        require(withdrawAmount > 0, "!withdrawAmount");
-
-        NeuronPoolUtils.transferAsset(WETH, vaultParams.asset, msg.sender, withdrawAmount);
+        if (_withdrawToken == address(collateralToken)) {
+            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, withdrawAmount);
+        } else {
+            NeuronPoolUtils.unwrapYieldToken(
+                withdrawAmount,
+                _withdrawToken,
+                address(collateralToken),
+                COLLATERAL_WITHDRAWAL_BUFFER
+            );
+            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, withdrawAmount);
+        }
 
         return withdrawAmount;
     }
@@ -682,8 +687,10 @@ contract NeuronCollateralVault is
         // Wrap premium to neuron pool tokens
         if (premiumToken != vaultParams.asset) {
             uint256 premiumBalance = IERC20(premiumToken).balanceOf(address(this));
-            IERC20(premiumToken).safeApprove(address(collateralToken), premiumBalance);
-            collateralToken.deposit(premiumToken, premiumBalance);
+            if (premiumBalance != 0) {
+                IERC20(premiumToken).safeApprove(address(collateralToken), premiumBalance);
+                collateralToken.deposit(premiumToken, premiumBalance);
+            }
         }
 
         uint256 lockedAmount = vaultState.lockedAmount;

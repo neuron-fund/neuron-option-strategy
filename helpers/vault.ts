@@ -2,8 +2,6 @@ import { BigNumber } from '@ethersproject/bignumber'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { ethers, deployments } from 'hardhat'
 import { parseUnits } from 'ethers/lib/utils'
-import TestVolOracle_ABI from '../constants/abis/TestVolOracle.json'
-import OptionsPremiumPricerInStables_ABI from '../constants/abis/OptionsPremiumPricerInStables.json'
 import moment from 'moment-timezone'
 import {
   ETH_PRICE_ORACLE,
@@ -16,9 +14,6 @@ import {
   ON_TOKEN_FACTORY,
   GNOSIS_EASY_AUCTION,
   DEX_ROUTER,
-  TestVolOracle_BYTECODE,
-  OptionsPremiumPricerInStables_BYTECODE,
-  GAMMA_ORACLE,
   CHAINID,
 } from '../constants/constants'
 import {
@@ -39,8 +34,6 @@ import {
   IONtoken,
   IONtokenFactory,
   IPricer,
-  MockNeuronPool,
-  MockNeuronPoolPricer,
   NeuronCollateralVault,
   NeuronPoolUtils,
   NeuronThetaVault,
@@ -51,6 +44,9 @@ import {
   IGnosisAuction__factory,
   INeuronPool__factory,
   INeuronPoolPricer__factory,
+  IWETH__factory,
+  TestVolOracle__factory,
+  OptionsPremiumPricer__factory,
 } from '../typechain-types'
 import { Contract } from '@ethersproject/contracts'
 import * as time from './time'
@@ -65,6 +61,7 @@ export const DELAY_INCREMENT = 100
 export const FEE_SCALING = BigNumber.from(10).pow(6)
 export const WEEKS_PER_YEAR = 52142857
 export const PERIOD = 43200 // 12 hours
+export const COMMIT_PHASE_DURATION = 1800 // 30 minutes
 
 export type Option = {
   address: string
@@ -236,12 +233,11 @@ export async function initiateVault(params: VaultTestParams) {
   const getTopOfPeriod = async () => {
     const latestTimestamp = (await provider.getBlock('latest')).timestamp
     let topOfPeriod: number
-
     const rem = latestTimestamp % PERIOD
     if (rem < Math.floor(PERIOD / 2)) {
       topOfPeriod = latestTimestamp - rem + PERIOD
     } else {
-      topOfPeriod = latestTimestamp + rem + PERIOD
+      topOfPeriod = latestTimestamp + (PERIOD - rem) - COMMIT_PHASE_DURATION
     }
     return topOfPeriod
   }
@@ -273,19 +269,18 @@ export async function initiateVault(params: VaultTestParams) {
     }
   }
 
-  const TestVolOracle = await getContractFactory(TestVolOracle_ABI, TestVolOracle_BYTECODE, ownerSigner)
+  const TestVolOracleFactory = (await getContractFactory('TestVolOracle', ownerSigner)) as TestVolOracle__factory
 
-  volOracle = await TestVolOracle.deploy(PERIOD, 7)
+  volOracle = await TestVolOracleFactory.deploy(PERIOD, 7)
 
   await volOracle.initPool(
     underlying === WETH ? UNIV3_ETH_USDC_POOL[CHAINID.ETH_MAINNET] : UNIV3_WBTC_USDC_POOL[CHAINID.ETH_MAINNET]
   )
 
-  const OptionsPremiumPricer = await getContractFactory(
-    OptionsPremiumPricerInStables_ABI,
-    OptionsPremiumPricerInStables_BYTECODE,
+  const OptionsPremiumPricer = (await getContractFactory(
+    'OptionsPremiumPricer',
     ownerSigner
-  )
+  )) as OptionsPremiumPricer__factory
 
   const StrikeSelection = await getContractFactory('DeltaStrikeSelection', ownerSigner)
 
@@ -313,7 +308,7 @@ export async function initiateVault(params: VaultTestParams) {
 
   gnosisAuction = IGnosisAuction__factory.connect(GNOSIS_EASY_AUCTION[CHAINID.ETH_MAINNET], ownerSigner)
 
-  for (const additionalPricer of params.additionalPricersNames) {
+  for (const additionalPricer of params?.additionalPricersNames || []) {
     const additionalPricerDeployment = await deployments.get(additionalPricer.pricerName)
     await setAssetPricer(additionalPricer.asset, additionalPricerDeployment.address)
   }
@@ -342,7 +337,6 @@ export async function initiateVault(params: VaultTestParams) {
 
     const collateralUnwrappedAsset = await neuronPool.token()
     const neuronPoolSupportedTokens = await neuronPool.getSupportedTokens()
-    // TODO neuron actually not all are "base tokens" for metapool, it can also be other from 3crv token in metapool
     const neuronPoolBaseTokens = neuronPoolSupportedTokens.filter(x => x !== collateralUnwrappedAsset)
 
     const collateralVaultInitializeArgs = [
@@ -360,7 +354,8 @@ export async function initiateVault(params: VaultTestParams) {
         neuronPoolAddress,
         underlying,
         minimumSupply,
-        parseUnits('500', tokenDecimals > 18 ? tokenDecimals : 18),
+        // TODO add caps in params
+        parseUnits('50000', 18),
       ],
       neuronPoolBaseTokens,
     ]
@@ -513,8 +508,7 @@ export async function initiateVault(params: VaultTestParams) {
 
   if (params.underlying === WETH) {
     for (const signerToDeposit of addressToDeposit) {
-      // @ts-ignore
-      await assetContract.connect(signerToDeposit).deposit({ value: parseEther('100') })
+      await IWETH__factory.connect(WETH, signerToDeposit).deposit({ value: parseEther('100') })
     }
   }
 

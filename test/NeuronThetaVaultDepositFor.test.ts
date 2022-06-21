@@ -1,6 +1,3 @@
-import * as time from '../helpers/time'
-import { initiateVault, VaultTestParams } from '../helpers/vault'
-import { NeuronEthThetaVaultCallTestParams } from '../helpers/testParams'
 import { depositToNeuronPool } from '../helpers/neuronPool'
 import { BigNumber } from '@ethersproject/bignumber'
 import { assert } from '../helpers/assertions'
@@ -44,8 +41,8 @@ runVaultTests('#depositFor', async function (params) {
       assert.equal(round, 1)
       assert.bnEqual(amount, depositAmount)
       const { round: round2, amount: amount2 } = await collateralVault.depositReceipts(user)
-      await expect(round2).to.be.undefined
-      await expect(amount2).to.be.undefined
+      await expect(round2).to.be.equal(BigNumber.from(0))
+      await expect(amount2).to.be.equal(BigNumber.from(0))
     })
 
     it('tops up existing deposit', async function () {

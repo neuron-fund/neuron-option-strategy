@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.4;
+pragma solidity 0.8.9;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -10,8 +10,11 @@ contract MockNeuronPool is ERC20 {
     address public asset;
     uint256 public balance;
 
-    constructor(address _asset) ERC20("MockNeuronPool", "MNP") {
-        asset = _asset;
+    address[] public supportedTokens;
+
+    constructor(address[] memory _supportedTokens) ERC20("MockNeuronPool", "MNP") {
+        supportedTokens = _supportedTokens;
+        asset = supportedTokens[0];
     }
 
     function pricePerShare() public view returns (uint256) {
@@ -19,14 +22,25 @@ contract MockNeuronPool is ERC20 {
         return totalSupply == 0 ? 0 : (balance * (10**decimals())) / totalSupply;
     }
 
-    function deposit(uint256 _amount) external {
+    function _isSupportedToken(address _token) internal view returns (bool) {
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (supportedTokens[i] == _token) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function deposit(uint256 _amount, address _token) external returns (uint256) {
+        require(_isSupportedToken(_token), "Token is not supported");
         console.log("_amount", _amount);
         console.log("balance BEFORE", balance);
         uint256 balanceBefore = balance;
         balance += _amount;
         console.log("balance AFTER", balance);
-        IERC20(asset).transferFrom(msg.sender, address(this), _amount);
-        console.log("deposit ~ asset", asset);
+        IERC20(_token).transferFrom(msg.sender, address(this), _amount);
+        console.log("deposit ~ asset", _token);
         uint256 shares;
         uint256 totalSupply = totalSupply();
         console.log("totalSupply", totalSupply);
@@ -38,6 +52,8 @@ contract MockNeuronPool is ERC20 {
         }
         console.log("shares", shares);
         _mint(msg.sender, shares);
+
+        return shares;
     }
 
     function withdraw(uint256 _shares) external {

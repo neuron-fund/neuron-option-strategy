@@ -334,16 +334,6 @@ interface MarginVault {
 }
 
 interface Actions {
-    struct ActionArgs {
-        uint8 actionType;
-        address owner;
-        address secondAddress;
-        address[] assets;
-        uint256 vaultId;
-        uint256[] amounts;
-        bytes data;
-    }
-
     enum ActionType {
         OpenVault,
         MintShortOption,
@@ -356,40 +346,38 @@ interface Actions {
         Redeem,
         Call
     }
+
+    struct ActionArgs {
+        ActionType actionType;
+        address owner;
+        address secondAddress;
+        address[] assets;
+        uint256 vaultId;
+        uint256[] amounts;
+        bytes data;
+    }
 }
 
 interface IOracle {
-    function isLockingPeriodOver(address _asset, uint256 _expiryTimestamp) external view returns (bool);
-
-    function isDisputePeriodOver(address _asset, uint256 _expiryTimestamp) external view returns (bool);
-
-    function getExpiryPrice(address _asset, uint256 _expiryTimestamp) external view returns (uint256, bool);
-
-    function getDisputer() external view returns (address);
-
-    function getPricer(address _asset) external view returns (address);
-
-    function getPrice(address _asset) external view returns (uint256);
-
-    function getPricerLockingPeriod(address _pricer) external view returns (uint256);
-
-    function getPricerDisputePeriod(address _pricer) external view returns (uint256);
-
-    function getChainlinkRoundData(address _asset, uint80 _roundId) external view returns (uint256, uint256);
-
-    // Non-view function
-
-    function setAssetPricer(address _asset, address _pricer) external;
-
-    function setLockingPeriod(address _pricer, uint256 _lockingPeriod) external;
-
-    function setDisputePeriod(address _pricer, uint256 _disputePeriod) external;
-
-    function setExpiryPrice(
-        address _asset,
-        uint256 _expiryTimestamp,
-        uint256 _price
-    ) external;
+    event DisputerUpdated(address indexed newDisputer);
+    event ExpiryPriceDisputed(
+        address indexed asset,
+        uint256 indexed expiryTimestamp,
+        uint256 disputedPrice,
+        uint256 newPrice,
+        uint256 disputeTimestamp
+    );
+    event ExpiryPriceUpdated(
+        address indexed asset,
+        uint256 indexed expiryTimestamp,
+        uint256 price,
+        uint256 onchainTimestamp
+    );
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event PricerDisputePeriodUpdated(address indexed pricer, uint256 disputePeriod);
+    event PricerLockingPeriodUpdated(address indexed pricer, uint256 lockingPeriod);
+    event PricerUpdated(address indexed asset, address indexed pricer);
+    event StablePriceUpdated(address indexed asset, uint256 price);
 
     function disputeExpiryPrice(
         address _asset,
@@ -397,7 +385,53 @@ interface IOracle {
         uint256 _price
     ) external;
 
+    function endMigration() external;
+
+    function getChainlinkRoundData(address _asset, uint80 _roundId) external view returns (uint256, uint256);
+
+    function getDisputer() external view returns (address);
+
+    function getExpiryPrice(address _asset, uint256 _expiryTimestamp) external view returns (uint256, bool);
+
+    function getPrice(address _asset) external view returns (uint256);
+
+    function getPricer(address _asset) external view returns (address);
+
+    function getPricerDisputePeriod(address _pricer) external view returns (uint256);
+
+    function getPricerLockingPeriod(address _pricer) external view returns (uint256);
+
+    function isDisputePeriodOver(address _asset, uint256 _expiryTimestamp) external view returns (bool);
+
+    function isLockingPeriodOver(address _asset, uint256 _expiryTimestamp) external view returns (bool);
+
+    function migrateOracle(
+        address _asset,
+        uint256[] memory _expiries,
+        uint256[] memory _prices
+    ) external;
+
+    function owner() external view returns (address);
+
+    function renounceOwnership() external;
+
+    function setAssetPricer(address _asset, address _pricer) external;
+
+    function setDisputePeriod(address _pricer, uint256 _disputePeriod) external;
+
     function setDisputer(address _disputer) external;
+
+    function setExpiryPrice(
+        address _asset,
+        uint256 _expiryTimestamp,
+        uint256 _price
+    ) external;
+
+    function setLockingPeriod(address _pricer, uint256 _lockingPeriod) external;
+
+    function setStablePrice(address _asset, uint256 _price) external;
+
+    function transferOwnership(address newOwner) external;
 }
 
 interface IPricer {

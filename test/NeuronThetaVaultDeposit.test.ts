@@ -5,6 +5,7 @@ import { expect } from 'chai'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
 import { CHAINID } from '../constants/constants'
 import { runVaultTests } from '../helpers/runVaultTests'
+import { ethers } from 'hardhat'
 
 runVaultTests('#deposit', async function (params) {
   const {
@@ -17,11 +18,11 @@ runVaultTests('#deposit', async function (params) {
     minimumSupply,
   } = params
 
-  return () => {
-    const depositAmount = params.depositAmount
-    let collateralVault = collateralVaults[0]
-    let neuronPool = collateralAssetsContracts[0]
+  const depositAmount = params.depositAmount
+  const collateralVault = collateralVaults[0]
+  const neuronPool = collateralAssetsContracts[0]
 
+  return () => {
     it('creates a pending deposit', async function () {
       const { tx } = await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
       assert.isTrue((await neuronPool.balanceOf(user)).isZero())
@@ -67,7 +68,6 @@ runVaultTests('#deposit', async function (params) {
       const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))
       assert.bnEqual(withdrawAmount, depositAmount, 'Collateral withdraw amount is not equal to deposit amount')
       await neuronPool.connect(userSigner).approve(collateralVault.address, collateralBalanceStarted)
-
       await expect(
         collateralVault.connect(userSigner).deposit(collateralBalanceStarted, neuronPool.address)
       ).to.be.revertedWith('Insufficient balance')
@@ -79,10 +79,13 @@ runVaultTests('#deposit', async function (params) {
         amount: amount1,
         unredeemedShares: unredeemedShares1,
       } = await collateralVault.depositReceipts(user)
+      console.log('amount1', amount1)
       assert.equal(round1, 1)
       assert.bnEqual(amount1, params.depositAmount)
       assert.bnEqual(unredeemedShares1, BigNumber.from(0))
+      console.log("(await provider.getBlock('latest')).timestamp", (await ethers.provider.getBlock('latest')).timestamp)
       await rollToNextOption()
+      console.log('after roll')
       const {
         round: round2,
         amount: amount2,
@@ -90,7 +93,9 @@ runVaultTests('#deposit', async function (params) {
       } = await collateralVault.depositReceipts(user)
       assert.equal(round2, 1)
       assert.bnEqual(amount2, params.depositAmount)
+      console.log('amount2', amount2)
       assert.bnEqual(unredeemedShares2, BigNumber.from(0))
+      console.log('params.depositAmount', params.depositAmount)
       await depositIntoCollateralVault(collateralVault, neuronPool, params.depositAmount, userSigner)
       assert.bnEqual(await neuronPool.balanceOf(collateralVault.address), params.depositAmount)
       // vault will still hold the vault shares

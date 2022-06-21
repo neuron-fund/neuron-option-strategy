@@ -1,4 +1,4 @@
-import hre, { ethers, artifacts } from 'hardhat'
+import hre, { ethers, artifacts, deployments } from 'hardhat'
 import { increaseTo } from './time'
 import ORACLE_ABI from '../constants/abis/OpynOracle.json'
 import {
@@ -17,6 +17,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { BigNumber, BigNumberish, Contract, Signer } from 'ethers'
 import { wmul } from '../helpers/math'
 import { getAsset } from './funds'
+import { IOracle__factory } from '../typechain-types'
 const { provider } = ethers
 const { parseEther } = ethers.utils
 const chainId = hre.network.config.chainId || 1
@@ -109,23 +110,32 @@ export async function whitelistProduct(
   await whitelist.connect(ownerSigner).whitelistProduct(underlying, strike, collaterals, isPut)
 }
 
-export async function setupOracle(asset: string, signer: SignerWithAddress) {
-  const oracleOwner = GAMMA_WHITELIST_OWNER[chainId]
-
+export async function getOracle() {
+  const signer = (await ethers.getSigners())[0]
+  const oracleAddress = await (await deployments.get('Oracle')).address
+  const oracle = IOracle__factory.connect(oracleAddress, signer)
+  const oracleOwnerAddress = await oracle.owner()
   await hre.network.provider.request({
     method: 'hardhat_impersonateAccount',
-    params: [oracleOwner],
+    params: [oracleOwnerAddress],
   })
-  const oracleOwnerSigner = await provider.getSigner(oracleOwner)
+  const oracleOwner = await provider.getSigner(oracleOwnerAddress)
+  return {
+    oracle: oracle.connect(oracleOwner),
+    oracleOwnerAddress,
+    oracleOwner,
+  }
+}
 
-  const oracle = new ethers.Contract(GAMMA_ORACLE[chainId], ORACLE_ABI, oracleOwnerSigner)
+export async function setupOracle(asset: string, signer: SignerWithAddress) {
+  const { oracle, oracleOwnerAddress, oracleOwner } = await getOracle()
 
   await signer.sendTransaction({
-    to: oracleOwner,
+    to: oracleOwnerAddress,
     value: parseEther('0.5'),
   })
 
-  await oracle.connect(oracleOwnerSigner).setStablePrice(USDC_ADDRESS[chainId], '100000000')
+  await oracle.connect(oracleOwner).setStablePrice(USDC_ADDRESS[chainId], '100000000')
 
   const pricerAddress = await oracle.getPricer(asset)
   await hre.network.provider.request({
@@ -142,43 +152,6 @@ export async function setupOracle(asset: string, signer: SignerWithAddress) {
   return oracle.connect(pricerSigner)
 }
 
-export async function setOpynOracleExpiryPrice(
-  asset: string,
-  oracle: Contract,
-  expiry: BigNumber,
-  settlePrice: BigNumber
-) {
-  await increaseTo(expiry.toNumber() + ORACLE_LOCKING_PERIOD + 1)
-
-  const res = await oracle.setExpiryPrice(asset, expiry, settlePrice)
-  const receipt = await res.wait()
-  const timestamp = (await provider.getBlock(receipt.blockNumber)).timestamp
-
-  await increaseTo(timestamp + ORACLE_DISPUTE_PERIOD + 1)
-}
-
-export async function setOpynOracleExpiryPriceYearn(
-  underlyingAsset: string,
-  underlyingOracle: Contract,
-  underlyingSettlePrice: BigNumber,
-  collateralPricer: Contract,
-  expiry: BigNumber
-) {
-  await increaseTo(expiry.toNumber() + ORACLE_LOCKING_PERIOD + 1)
-
-  const res = await underlyingOracle.setExpiryPrice(underlyingAsset, expiry, underlyingSettlePrice)
-  await res.wait()
-  await hre.network.provider.request({
-    method: 'hardhat_impersonateAccount',
-    params: [ORACLE_OWNER[chainId]],
-  })
-  const oracleOwnerSigner = await provider.getSigner(ORACLE_OWNER[chainId])
-  const res2 = await collateralPricer.connect(oracleOwnerSigner).setExpiryPriceInOracle(expiry)
-  const receipt = await res2.wait()
-
-  const timestamp = (await provider.getBlock(receipt.blockNumber)).timestamp
-  await increaseTo(timestamp + ORACLE_DISPUTE_PERIOD + 1)
-}
 export async function setOpynOracleExpiryPriceNeuron(
   underlyingAsset: string,
   underlyingOracle: Contract,
@@ -198,6 +171,7 @@ export async function setOpynOracleExpiryPriceNeuron(
 
   let receipt
   for (const collateralPricer of collateralPricers) {
+    console.log('collateralPricer', collateralPricer.address)
     const res2 = await collateralPricer.connect(oracleOwnerSigner).setExpiryPriceInOracle(expiry)
     receipt = await res2.wait()
   }
@@ -395,48 +369,6 @@ export function encodeOrder(order: Order): string {
 
 async function sharesToAsset(shares: BigNumber, assetPerShare: BigNumber, decimals: BigNumber) {
   return shares.mul(assetPerShare).div(BigNumber.from(10).pow(decimals.toString()))
-}
-
-export function encodePath(tokenAddresses, fees) {
-  // Encode path for Uniswap swap path
-  const FEE_SIZE = 3
-
-  if (tokenAddresses.length !== fees.length + 1) {
-    throw new Error('path/fee lengths do not match')
-  }
-
-  let encoded = '0x'
-  for (let i = 0; i < fees.length; i++) {
-    // 20 byte encoding of the address
-    encoded += tokenAddresses[i].slice(2)
-    // 3 byte encoding of the fee
-    encoded += fees[i].toString(16).padStart(2 * FEE_SIZE, '0')
-  }
-  // encode the final token
-  encoded += tokenAddresses[tokenAddresses.length - 1].slice(2)
-
-  return encoded.toLowerCase()
-}
-
-/* eslint @typescript-eslint/no-explicit-any: "off" */
-export const objectEquals = (a: any, b: any) => {
-  if (a === b) return true
-  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime()
-  if (!a || !b || (typeof a !== 'object' && typeof b !== 'object')) return a === b
-  /* eslint no-undefined: "off" */
-  if (a === null || a === undefined || b === null || b === undefined) return false
-  if (a.prototype !== b.prototype) return false
-  let keys = Object.keys(a)
-  if (keys.length !== Object.keys(b).length) return false
-  return keys.every(k => objectEquals(a[k], b[k]))
-}
-
-export const serializeMap = (map: Record<string, unknown>) => {
-  return Object.fromEntries(
-    Object.keys(map).map(key => {
-      return [key, serializeToObject(map[key])]
-    })
-  )
 }
 
 export const serializeToObject = (solidityValue: unknown) => {

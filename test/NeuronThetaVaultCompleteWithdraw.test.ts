@@ -1,8 +1,11 @@
 import { expect } from 'chai'
 import { BigNumber } from 'ethers'
+import { CHAINID } from '../constants/constants'
 import { assert } from '../helpers/assertions'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
+import { depositToNeuronPool } from '../helpers/neuronPool'
 import { runVaultTests } from '../helpers/runVaultTests'
+import { IERC20Detailed__factory } from '../typechain-types'
 
 runVaultTests('#completeWithdraw', async function (params) {
   const {
@@ -10,7 +13,6 @@ runVaultTests('#completeWithdraw', async function (params) {
     userSigner,
     ownerSigner,
     isPut,
-    assetContract,
     collateralVaults,
     collateralAssetsContracts,
     firstOptionStrike,
@@ -27,19 +29,25 @@ runVaultTests('#completeWithdraw', async function (params) {
 
   return () => {
     it('reverts when not initiated', async function () {
-      await expect(collateralVault.connect(ownerSigner).completeWithdraw()).to.be.revertedWith('Not initiated')
+      await expect(collateralVault.connect(ownerSigner).completeWithdraw(neuronPool.address)).to.be.revertedWith(
+        'Not initiated'
+      )
     })
 
     it('reverts when round not closed', async function () {
-      await expect(collateralVault.connect(userSigner).completeWithdraw()).to.be.revertedWith('Round not closed')
+      await expect(collateralVault.connect(userSigner).completeWithdraw(neuronPool.address)).to.be.revertedWith(
+        'Round not closed'
+      )
     })
 
     it('reverts when calling completeWithdraw twice', async function () {
       await rollToSecondOption(firstOptionStrike)
 
-      await collateralVault.connect(userSigner).completeWithdraw()
+      await collateralVault.connect(userSigner).completeWithdraw(neuronPool.address)
 
-      await expect(collateralVault.connect(userSigner).completeWithdraw()).to.be.revertedWith('Not initiated')
+      await expect(collateralVault.connect(userSigner).completeWithdraw(neuronPool.address)).to.be.revertedWith(
+        'Not initiated'
+      )
     })
 
     it('completes the withdrawal', async function () {
@@ -55,14 +63,13 @@ runVaultTests('#completeWithdraw', async function (params) {
       const lastQueuedWithdrawAmount = await collateralVault.lastQueuedWithdrawAmount()
 
       let beforeBalance: BigNumber
-      beforeBalance = await assetContract.balanceOf(user)
+      beforeBalance = await neuronPool.balanceOf(user)
 
       const { queuedWithdrawShares: startQueuedShares } = await collateralVault.vaultState()
 
-      const tx = await collateralVault.connect(userSigner).completeWithdraw()
+      const tx = await collateralVault.connect(userSigner).completeWithdraw(neuronPool.address)
       await expect(tx).to.emit(collateralVault, 'Withdraw').withArgs(user, withdrawAmount.toString(), depositAmount)
-
-      await expect(tx).to.emit(assetContract, 'Transfer').withArgs(collateralVault.address, user, withdrawAmount)
+      await expect(tx).to.emit(neuronPool, 'Transfer').withArgs(collateralVault.address, user, withdrawAmount)
 
       const { shares, round } = await collateralVault.connect(userSigner).withdrawals(user)
       assert.bnEqual(shares, BigNumber.from(0))
@@ -78,7 +85,7 @@ runVaultTests('#completeWithdraw', async function (params) {
       assert.bnEqual(startQueuedShares.sub(endQueuedShares), depositAmount)
 
       let actualWithdrawAmount: BigNumber
-      const afterBalance = await assetContract.balanceOf(user)
+      const afterBalance = await neuronPool.balanceOf(user)
       actualWithdrawAmount = afterBalance.sub(beforeBalance)
       // Should be less because the pps is down
       assert.bnLt(actualWithdrawAmount, depositAmount)

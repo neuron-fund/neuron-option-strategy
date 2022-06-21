@@ -3,86 +3,163 @@ import { BigNumber } from 'ethers'
 import { assert } from '../helpers/assertions'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
 import { runVaultTests } from '../helpers/runVaultTests'
+import { setOpynOracleExpiryPriceNeuron, setupOracle } from '../helpers/utils'
+import * as time from '../helpers/time'
 
-runVaultTests('#completeWithdraw', async function (params) {
+runVaultTests('#initiateWithdraw', async function (params) {
   const {
     user,
     userSigner,
     ownerSigner,
-    isPut,
-    assetContract,
     collateralVaults,
     collateralAssetsContracts,
     firstOptionStrike,
     rollToNextOption,
-    rollToSecondOption,
     depositAmount,
+    collateralAssetsOracles,
+    vault,
+    secondOptionStrike,
+    getCurrentOptionExpiry,
+    keeperSigner,
+    underlying,
   } = params
   const collateralVault = collateralVaults[0]
   const neuronPool = collateralAssetsContracts[0]
-  await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
-  await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, ownerSigner)
-  await rollToNextOption()
-  await collateralVault.connect(userSigner).initiateWithdraw(depositAmount)
+  const oracle = await setupOracle(underlying, ownerSigner)
 
   return () => {
-    it('reverts when not initiated', async function () {
-      await expect(collateralVault.connect(ownerSigner).completeWithdraw()).to.be.revertedWith('Not initiated')
-    })
-
-    it('reverts when round not closed', async function () {
-      await expect(collateralVault.connect(userSigner).completeWithdraw()).to.be.revertedWith('Round not closed')
-    })
-
-    it('reverts when calling completeWithdraw twice', async function () {
-      await rollToSecondOption(firstOptionStrike)
-
-      await collateralVault.connect(userSigner).completeWithdraw()
-
-      await expect(collateralVault.connect(userSigner).completeWithdraw()).to.be.revertedWith('Not initiated')
-    })
-
-    it('completes the withdrawal', async function () {
-      const firstStrikePrice = firstOptionStrike
-      const settlePriceITM = isPut ? firstStrikePrice.sub(100000000) : firstStrikePrice.add(100000000)
-
-      await rollToSecondOption(settlePriceITM)
-
-      const pricePerShare = await collateralVault.roundPricePerShare(2)
-      const withdrawAmount = depositAmount
-        .mul(pricePerShare)
-        .div(BigNumber.from(10).pow(await collateralVault.decimals()))
-      const lastQueuedWithdrawAmount = await collateralVault.lastQueuedWithdrawAmount()
-
-      let beforeBalance: BigNumber
-      beforeBalance = await assetContract.balanceOf(user)
-
-      const { queuedWithdrawShares: startQueuedShares } = await collateralVault.vaultState()
-
-      const tx = await collateralVault.connect(userSigner).completeWithdraw()
-      await expect(tx).to.emit(collateralVault, 'Withdraw').withArgs(user, withdrawAmount.toString(), depositAmount)
-
-      await expect(tx).to.emit(assetContract, 'Transfer').withArgs(collateralVault.address, user, withdrawAmount)
-
-      const { shares, round } = await collateralVault.connect(userSigner).withdrawals(user)
-      assert.bnEqual(shares, BigNumber.from(0))
-      assert.equal(round, 2)
-
-      const { queuedWithdrawShares: endQueuedShares } = await collateralVault.connect(userSigner).vaultState()
-
-      assert.bnEqual(endQueuedShares, BigNumber.from(0))
-      assert.bnEqual(
-        await collateralVault.connect(userSigner).lastQueuedWithdrawAmount(),
-        lastQueuedWithdrawAmount.sub(withdrawAmount)
+    it('reverts when user initiates withdraws without any deposit', async function () {
+      await expect(collateralVault.initiateWithdraw(depositAmount)).to.be.revertedWith(
+        'ERC20: transfer amount exceeds balance'
       )
-      assert.bnEqual(startQueuedShares.sub(endQueuedShares), depositAmount)
+    })
 
-      let actualWithdrawAmount: BigNumber
-      const afterBalance = await assetContract.balanceOf(user)
-      actualWithdrawAmount = afterBalance.sub(beforeBalance)
-      // Should be less because the pps is down
-      assert.bnLt(actualWithdrawAmount, depositAmount)
-      assert.bnEqual(actualWithdrawAmount, withdrawAmount)
+    it('reverts when passed 0 shares', async function () {
+      await expect(collateralVault.initiateWithdraw(0)).to.be.revertedWith('!numShares')
+    })
+
+    it('reverts when withdrawing more than unredeemed balance', async function () {
+      await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
+
+      await rollToNextOption()
+
+      await expect(collateralVault.connect(userSigner).initiateWithdraw(depositAmount.add(1))).to.be.revertedWith(
+        'ERC20: transfer amount exceeds balance'
+      )
+    })
+
+    it('reverts when withdrawing more than vault + account balance', async function () {
+      await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
+
+      await rollToNextOption()
+
+      // Move 1 share into account
+      await collateralVault.connect(userSigner).redeem(1)
+
+      await expect(collateralVault.connect(userSigner).initiateWithdraw(depositAmount.add(1))).to.be.revertedWith(
+        'ERC20: transfer amount exceeds balance'
+      )
+    })
+
+    it('reverts when initiating with past existing withdrawal', async function () {
+      await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
+
+      await rollToNextOption()
+
+      await collateralVault.connect(userSigner).initiateWithdraw(depositAmount.div(2))
+
+      // TODO remove opyn everywhere
+      await setOpynOracleExpiryPriceNeuron(
+        underlying,
+        oracle,
+        firstOptionStrike,
+        collateralAssetsOracles,
+        await getCurrentOptionExpiry()
+      )
+      await vault.connect(ownerSigner).setStrikePrice(secondOptionStrike)
+      await vault.connect(ownerSigner).commitAndClose()
+      await time.increaseTo((await vault.nextOptionReadyAt()).toNumber() + 1)
+      await vault.connect(keeperSigner).rollToNextOption()
+
+      await expect(collateralVault.connect(userSigner).initiateWithdraw(depositAmount.div(2))).to.be.revertedWith(
+        'Existing withdraw'
+      )
+    })
+
+    it('creates withdrawal from unredeemed shares', async function () {
+      await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
+
+      await rollToNextOption()
+
+      const tx = await collateralVault.connect(userSigner).initiateWithdraw(depositAmount)
+
+      await expect(tx).to.emit(collateralVault, 'InitiateWithdraw').withArgs(user, depositAmount, 2)
+
+      await expect(tx).to.emit(collateralVault, 'Transfer').withArgs(collateralVault.address, user, depositAmount)
+
+      const { round, shares } = await collateralVault.connect(userSigner).withdrawals(user)
+      assert.equal(round, 2)
+      assert.bnEqual(shares, depositAmount)
+    })
+
+    it('creates withdrawal by debiting user shares', async function () {
+      await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
+
+      await rollToNextOption()
+
+      await collateralVault.connect(userSigner).redeem(depositAmount.div(2))
+
+      const tx = await collateralVault.connect(userSigner).initiateWithdraw(depositAmount)
+
+      await expect(tx).to.emit(collateralVault, 'InitiateWithdraw').withArgs(user, depositAmount, 2)
+
+      // First we redeem the leftover amount
+      await expect(tx)
+        .to.emit(collateralVault, 'Transfer')
+        .withArgs(collateralVault.address, user, depositAmount.div(2))
+
+      // Then we debit the shares from the user
+      await expect(tx).to.emit(collateralVault, 'Transfer').withArgs(user, collateralVault.address, depositAmount)
+
+      assert.bnEqual(await collateralVault.balanceOf(user), BigNumber.from(0))
+      assert.bnEqual(await collateralVault.balanceOf(collateralVault.address), depositAmount)
+
+      const { round, shares } = await collateralVault.withdrawals(user)
+      assert.equal(round, 2)
+      assert.bnEqual(shares, depositAmount)
+    })
+
+    it('tops up existing withdrawal', async function () {
+      await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
+
+      await rollToNextOption()
+
+      const tx1 = await collateralVault.connect(userSigner).initiateWithdraw(depositAmount.div(2))
+      // We redeem the full amount on the first initiateWithdraw
+      await expect(tx1).to.emit(collateralVault, 'Transfer').withArgs(collateralVault.address, user, depositAmount)
+      await expect(tx1)
+        .to.emit(collateralVault, 'Transfer')
+        .withArgs(user, collateralVault.address, depositAmount.div(2))
+
+      const tx2 = await collateralVault.connect(userSigner).initiateWithdraw(depositAmount.div(2))
+      await expect(tx2)
+        .to.emit(collateralVault, 'Transfer')
+        .withArgs(user, collateralVault.address, depositAmount.div(2))
+
+      const { round, shares } = await collateralVault.connect(userSigner).withdrawals(user)
+      assert.equal(round, 2)
+      assert.bnEqual(shares, depositAmount)
+    })
+    it('reverts when there is insufficient balance over multiple calls', async function () {
+      await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
+
+      await rollToNextOption()
+
+      await collateralVault.connect(userSigner).initiateWithdraw(depositAmount.div(2))
+
+      await expect(
+        collateralVault.connect(userSigner).initiateWithdraw(depositAmount.div(2).add(1))
+      ).to.be.revertedWith('ERC20: transfer amount exceeds balance')
     })
   }
 })

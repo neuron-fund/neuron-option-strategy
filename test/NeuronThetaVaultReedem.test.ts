@@ -1,16 +1,11 @@
 import { expect } from 'chai'
 import { BigNumber } from 'ethers'
-import * as time from '../helpers/time'
 import { assert } from '../helpers/assertions'
-import { initiateVault, VaultTestParams } from '../helpers/vault'
-import { NeuronEthThetaVaultCallTestParams } from '../helpers/testParams'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
 import { runVaultTests } from '../helpers/runVaultTests'
 
 runVaultTests('#redeem', async function (params) {
-  const beforeSnapshotId = await time.takeSnapshot()
   const { user, userSigner, collateralVaults, collateralAssetsContracts, rollToNextOption, depositAmount } = params
-  const initSnapshotId = await time.takeSnapshot()
 
   return () => {
     it('reverts when 0 passed', async function () {

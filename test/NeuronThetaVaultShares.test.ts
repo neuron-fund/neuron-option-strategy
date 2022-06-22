@@ -1,9 +1,6 @@
 import { BigNumber } from 'ethers'
-import * as time from '../helpers/time'
 import { assert } from '../helpers/assertions'
-import { initiateVault, VaultTestParams } from '../helpers/vault'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
-import { NeuronEthThetaVaultCallTestParams } from '../helpers/testParams'
 import { runVaultTests } from '../helpers/runVaultTests'
 
 runVaultTests('#shares', async function (params) {

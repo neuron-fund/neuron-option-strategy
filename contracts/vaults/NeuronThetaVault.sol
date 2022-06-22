@@ -268,6 +268,7 @@ contract NeuronThetaVault is NeuronVault, NeuronThetaVaultStorage {
                     collateralVaults[i],
                     collateralVaultPremiumShare
                 );
+                // TODO event how much premium share was transfered for current collateral vault
             }
             if (collateralAssetBalance != 0) {
                 NeuronPoolUtils.transferAsset(WETH, collateralAssets[i], collateralVaults[i], collateralAssetBalance);

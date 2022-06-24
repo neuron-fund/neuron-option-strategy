@@ -37,12 +37,8 @@ abstract contract NeuronThetaVaultStorageV1 {
     uint256 public auctionDuration;
     // Auction id of current option
     uint256 public optionAuctionID;
-    // Amount locked for scheduled withdrawals last week;
-    uint256 public lastQueuedWithdrawAmount;
     // Auction bid token address
     address public auctionBiddingToken;
-    // Path for swaps
-    bytes public auctionPremiumSwapPath;
 }
 
 // We are following Compound's method of upgrading new contract implementations

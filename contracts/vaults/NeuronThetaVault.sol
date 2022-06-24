@@ -4,7 +4,6 @@ pragma solidity 0.8.9;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {DSMath} from "../vendor/DSMath.sol";
 import {GnosisAuction} from "../libraries/GnosisAuction.sol";
@@ -24,7 +23,7 @@ import "hardhat/console.sol";
  * Any changes/appends in storage variable needs to happen in NeuronThetaVaultStorage.
  * NeuronThetaYearnVault should not inherit from any other contract aside from NeuronVault, NeuronThetaVaultStorage
  */
-contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC20Upgradeable, NeuronThetaVaultStorage {
+contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, NeuronThetaVaultStorage {
     using SafeERC20 for IERC20;
     using ShareMath for Vault.DepositReceipt;
 
@@ -136,8 +135,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC
      * @param _feeRecipient is the address to recieve vault performance and management fees
      * @param _managementFee is the management fee pct.
      * @param _performanceFee is the perfomance fee pct.
-     * @param _tokenName is the name of the token
-     * @param _tokenSymbol is the symbol of the token
      * @param _optionsPremiumPricer is the address of the contract with the
        black-scholes premium calculation logic
      * @param _strikeSelection is the address of the contract with strike selection logic
@@ -151,8 +148,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC
         address _feeRecipient,
         uint256 _managementFee,
         uint256 _performanceFee,
-        string memory _tokenName,
-        string memory _tokenSymbol,
         address _optionsPremiumPricer,
         address _strikeSelection,
         uint32 _premiumDiscount,
@@ -165,13 +160,10 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC
             _feeRecipient,
             _performanceFee,
             _managementFee,
-            _tokenName,
-            _tokenSymbol,
             _vaultParams
         );
 
         __ReentrancyGuard_init();
-        __ERC20_init(_tokenName, _tokenSymbol);
         __Ownable_init();
         transferOwnership(_owner);
 
@@ -526,13 +518,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, ERC
 
     function getVaultParams() external view returns (Vault.VaultParams memory) {
         return vaultParams;
-    }
-
-    /**
-     * @notice Returns the token decimals
-     */
-    function decimals() public view override returns (uint8) {
-        return vaultParams.decimals;
     }
 
     function nextOptionReadyAt() external view returns (uint256) {

@@ -457,8 +457,6 @@ library VaultLifecycle {
      * @param owner is the owner of the vault with critical permissions
      * @param feeRecipient is the address to recieve vault performance and management fees
      * @param performanceFee is the perfomance fee pct.
-     * @param tokenName is the name of the token
-     * @param tokenSymbol is the symbol of the token
      * @param _vaultParams is the struct with vault general data
      */
     function verifyInitializerParams(
@@ -467,17 +465,13 @@ library VaultLifecycle {
         address feeRecipient,
         uint256 performanceFee,
         uint256 managementFee,
-        string calldata tokenName,
-        string calldata tokenSymbol,
         Vault.VaultParams calldata _vaultParams
-    ) external view {
+    ) external pure {
         require(owner != address(0), "!owner");
         require(keeper != address(0), "!keeper");
         require(feeRecipient != address(0), "!feeRecipient");
         require(performanceFee < 100 * Vault.FEE_MULTIPLIER, "performanceFee >= 100%");
         require(managementFee < 100 * Vault.FEE_MULTIPLIER, "managementFee >= 100%");
-        require(bytes(tokenName).length > 0, "!tokenName");
-        require(bytes(tokenSymbol).length > 0, "!tokenSymbol");
 
         require(_vaultParams.collateralAssets.length != 0, "!collateralAssets");
 

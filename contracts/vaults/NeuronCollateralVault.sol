@@ -15,6 +15,7 @@ import {Vault} from "../libraries/Vault.sol";
 import {CollateralVaultLifecycle} from "../libraries/CollateralVaultLifecycle.sol";
 import {NeuronPoolUtils} from "../libraries/NeuronPoolUtils.sol";
 import {ShareMath} from "../libraries/ShareMath.sol";
+import {NeuronCollateralVaultStorage} from "../storage/NeuronCollateralVaultStorage.sol";
 
 import "hardhat/console.sol";
 
@@ -22,59 +23,12 @@ contract NeuronCollateralVault is
     INeuronCollateralVault,
     ReentrancyGuardUpgradeable,
     OwnableUpgradeable,
-    ERC20Upgradeable
+    ERC20Upgradeable,
+    NeuronCollateralVaultStorage
 {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using ShareMath for Vault.DepositReceipt;
-
-    /************************************************
-     *  NON UPGRADEABLE STORAGE
-     ***********************************************/
-
-    /// @notice Stores the user's pending deposit for the round
-    mapping(address => Vault.DepositReceipt) public depositReceipts;
-
-    /// @notice On every round's close, the pricePerShare value of an rTHETA token is stored
-    /// This is used to determine the number of shares to be returned
-    /// to a user with their DepositReceipt.depositAmount
-    mapping(uint256 => uint256) public roundPricePerShare;
-
-    /// @notice Stores pending user withdrawals
-    mapping(address => Vault.Withdrawal) public withdrawals;
-
-    mapping(address => bool) public allowedDepositTokens;
-
-    /// @notice Vault's parameters like cap, decimals
-    Vault.CollateralVaultParams public vaultParams;
-
-    /// @notice Vault's lifecycle state like round and locked amounts
-    Vault.CollateralVaultState public vaultState;
-
-    /// @notice Fee recipient for the performance and management fees
-    address public feeRecipient;
-
-    /// @notice role in charge of weekly vault operations such as rollToNextOption and burnRemainingONTokens
-    // no access to critical vault changes
-    address public keeper;
-
-    /// @notice Performance fee charged on premiums earned in rollToNextOption. Only charged when there is no loss.
-    uint256 public performanceFee;
-
-    /// @notice Management fee charged on entire AUM in rollToNextOption. Only charged when there is no loss.
-    uint256 public managementFee;
-
-    /// @notice NeuronPool used as collateral contract
-    INeuronPool public collateralToken;
-
-    uint256 public lastQueuedWithdrawAmount;
-
-    // Gap is left to avoid storage collisions. Though NeuronVault is not upgradeable, we add this as a safety measure.
-    uint256[30] private ____gap;
-
-    // *IMPORTANT* NO NEW STORAGE VARIABLES SHOULD BE ADDED HERE
-    // This is to prevent storage collisions. All storage variables should be appended to NeuronThetaYearnVaultStorage
-    // https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable#modifying-your-contracts
 
     /************************************************
      *  IMMUTABLES & CONSTANTS
@@ -88,9 +42,6 @@ contract NeuronCollateralVault is
 
     /// @notice Withdrawal buffer for yearn vault
     uint256 public constant COLLATERAL_WITHDRAWAL_BUFFER = 5; // 0.05%
-
-    /// @notice 7 day period between each options sale.
-    uint256 public constant PERIOD = 7 days;
 
     // Number of weeks per year = 52.142857 weeks * FEE_MULTIPLIER = 52142857
     // Dividing by weeks per year requires doing num.mul(FEE_MULTIPLIER).div(WEEKS_PER_YEAR)

@@ -21,7 +21,7 @@ contract ManualVolOracle is AccessControl {
         address underlying;
         // Asset used to collateralize an option, eg an stETH-collateralized option's collateral is wstETH
         address collateralAsset;
-        // If an otoken is a put or not
+        // If an onToken is a put or not
         bool isPut;
     }
 

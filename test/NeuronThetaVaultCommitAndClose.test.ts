@@ -11,6 +11,7 @@ import { convertPriceAmount } from '../helpers/utils'
 import { getAsset } from '../helpers/funds'
 import { wmul } from '../helpers/math'
 import { runVaultTests } from '../helpers/runVaultTests'
+import { IONtoken__factory } from '../typechain-types'
 
 const { getContractAt } = ethers
 
@@ -33,20 +34,18 @@ runVaultTests('#commitAndClose', async function (params) {
     keeperSigner,
     firstOption,
     optionsPremiumPricer,
+    collateralAssetsAddresses,
+    firstOptionStrike,
+    firstOptionExpiry,
   } = params
   const provider = ethers.provider
-  console.log('IN COMMIT AND CLOSE')
 
   return () => {
-    console.log('IN COMMIT AND CLOSE RETURN')
     it('sets the next option and closes existing short', async function () {
-      console.log('IN COMMIT AND CLOSE sets the next option and closes existing short')
       const depositAmount = params.depositAmount
       const collateralVault = collateralVaults[0]
       const neuronPool = collateralAssetsContracts[0]
-      console.log('BEFORE DEPOSIT INTO COLLATERAL')
       await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
-      console.log('AFTE DEPOSIT INTO COLLATERAL')
 
       const res = await vault.connect(ownerSigner).commitAndClose({ from: owner })
 
@@ -163,7 +162,7 @@ runVaultTests('#commitAndClose', async function (params) {
       let bid = wmul(totalOptionsAvailableToBuy.mul(BigNumber.from(10).pow(10)), firstOptionPremium)
 
       const queueStartElement = '0x0000000000000000000000000000000000000000000000000000000000000001'
-      await getAsset(CHAINID.ETH_MAINNET, auctionBiddingTokenContract.address, bid, userSigner.address)
+      await getAsset(auctionBiddingTokenContract.address, bid, userSigner.address)
       await auctionBiddingTokenContract.connect(userSigner).approve(gnosisAuction.address, bid.toString())
 
       // BID ON_TOKENS HERE

@@ -85,7 +85,7 @@ library NeuronPoolUtils {
      * @param recipient is the recipient
      * @param withdrawAmount is the withdraw amount in terms of yearn tokens
      * @param yieldTokenBalance is the collateral token (yvWETH) balance of the vault
-     * @param pricePerYearnShare is the yvWETH<->WETH price ratio
+     * @param pricePerShare is the yvWETH<->WETH price ratio
      */
     function withdrawBaseToken(
         address weth,
@@ -94,11 +94,11 @@ library NeuronPoolUtils {
         address recipient,
         uint256 withdrawAmount,
         uint256 yieldTokenBalance,
-        uint256 pricePerYearnShare
+        uint256 pricePerShare
     ) internal {
         uint256 underlyingTokensToWithdraw = DSMath.wmul(
             withdrawAmount.sub(yieldTokenBalance),
-            pricePerYearnShare.mul(decimalShift(collateralToken))
+            pricePerShare.mul(decimalShift(collateralToken))
         );
         transferAsset(weth, asset, payable(recipient), underlyingTokensToWithdraw);
     }

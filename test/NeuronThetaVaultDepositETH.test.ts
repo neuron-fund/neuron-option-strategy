@@ -16,7 +16,7 @@ runVaultTests('#depositETH', async function (params) {
         const depositAmount = params.depositAmount
         const collateralVault = collateralVaults[0]
         const neuronPool = collateralAssetsContracts[0]
-        await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, depositAmount)
+        await depositToNeuronPool(neuronPool, userSigner, depositAmount)
         const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(user)
         const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
         const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))
@@ -47,7 +47,7 @@ runVaultTests('#depositETH', async function (params) {
         const depositAmount = params.depositAmount
         const collateralVault = collateralVaults[0]
         const neuronPool = collateralAssetsContracts[0]
-        await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, depositAmount)
+        await depositToNeuronPool(neuronPool, userSigner, depositAmount)
         const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(user)
         const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
         const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))
@@ -62,7 +62,7 @@ runVaultTests('#depositETH', async function (params) {
         const depositAmount = params.depositAmount
         const collateralVault = collateralVaults[0]
         const neuronPool = collateralAssetsContracts[0]
-        await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, depositAmount)
+        await depositToNeuronPool(neuronPool, userSigner, depositAmount)
         const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(user)
         const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
         const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))

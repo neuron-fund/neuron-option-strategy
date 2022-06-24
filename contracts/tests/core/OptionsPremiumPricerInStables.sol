@@ -315,7 +315,7 @@ contract OptionsPremiumPricerInStables is DSMath {
             uint256 t
         )
     {
-        // chainlink oracle returns crypto / usd pairs with 8 decimals, like otoken strike price
+        // chainlink oracle returns crypto / usd pairs with 8 decimals, like onToken strike price
         sp = spotPrice.mul(10**8).div(10**priceOracleDecimals);
         // annualized vol * 10 ** 8 because delta expects 18 decimals
         // and annualizedVol is 8 decimals

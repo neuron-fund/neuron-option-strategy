@@ -22,7 +22,7 @@ runVaultTests('#depositFor', async function (params) {
 
   return () => {
     it('creates a pending deposit', async function () {
-      await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, depositAmount)
+      await depositToNeuronPool(neuronPool, userSigner, depositAmount)
       const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(userSigner.address)
       const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
       const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))
@@ -48,7 +48,7 @@ runVaultTests('#depositFor', async function (params) {
     it('tops up existing deposit', async function () {
       const totalDepositAmount = depositAmount.mul(BigNumber.from(2))
 
-      await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, totalDepositAmount)
+      await depositToNeuronPool(neuronPool, userSigner, totalDepositAmount)
       const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(userSigner.address)
       const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
       const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))
@@ -73,7 +73,7 @@ runVaultTests('#depositFor', async function (params) {
     it('does not inflate the share tokens on initialization', async function () {
       const depositAmount = BigNumber.from('100000000000')
 
-      await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, depositAmount)
+      await depositToNeuronPool(neuronPool, userSigner, depositAmount)
       const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(userSigner.address)
       const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
       const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))
@@ -90,7 +90,7 @@ runVaultTests('#depositFor', async function (params) {
     it('reverts when minimum shares are not minted', async function () {
       const depositAmount = BigNumber.from(minimumSupply).sub(BigNumber.from('1'))
 
-      await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, depositAmount)
+      await depositToNeuronPool(neuronPool, userSigner, depositAmount)
       const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(userSigner.address)
       const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
       const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))
@@ -104,7 +104,7 @@ runVaultTests('#depositFor', async function (params) {
 
     it('updates the previous deposit receipt', async function () {
       const totalDepositAmount = params.depositAmount.mul(2)
-      await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, totalDepositAmount)
+      await depositToNeuronPool(neuronPool, userSigner, totalDepositAmount)
       const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(userSigner.address)
       const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
       const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))

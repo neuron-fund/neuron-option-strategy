@@ -1,7 +1,6 @@
 import { BigNumber } from '@ethersproject/bignumber'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { ethers, deployments } from 'hardhat'
-import { parseUnits } from 'ethers/lib/utils'
 import moment from 'moment-timezone'
 import {
   ETH_PRICE_ORACLE,
@@ -47,6 +46,8 @@ import {
   IWETH__factory,
   TestVolOracle__factory,
   OptionsPremiumPricer__factory,
+  DeltaStrikeSelection,
+  DeltaStrikeSelection__factory,
 } from '../typechain-types'
 import { Contract } from '@ethersproject/contracts'
 import * as time from './time'
@@ -108,8 +109,6 @@ export type VaultTestParams = {
   depositAmount: BigNumber
   /** minimumSupply - Minimum supply to maintain for share and asset balance */
   minimumSupply: string
-  /** expectedMintAmount - Expected onToken amount to be minted with our deposit */
-  expectedMintAmount: BigNumber
   /** auctionDuration - Duration of gnosis auction in seconds */
   auctionDuration: number
   /** premiumDiscount - Premium discount of the sold options to incentivize arbitraguers (thousandths place: 000 - 999) */
@@ -156,7 +155,7 @@ export async function initiateVault(params: VaultTestParams) {
   let isPut = params.isPut
 
   // Contracts
-  let strikeSelection: Contract
+  let strikeSelection: DeltaStrikeSelection
   let volOracle: Contract
   let optionsPremiumPricer: Contract
   let gnosisAuction: IGnosisAuction
@@ -166,7 +165,7 @@ export async function initiateVault(params: VaultTestParams) {
   let vault: NeuronThetaVault
   let onTokenFactory: IONtokenFactory
   let defaultONtoken: IONtoken
-  let assetContract: IERC20Detailed
+  let underlyingContract: IERC20Detailed
   let usdcContract: IERC20Detailed
   let collateralVaults: NeuronCollateralVault[] = []
   let collateralVaultsAddresses: string[] = []
@@ -235,10 +234,11 @@ export async function initiateVault(params: VaultTestParams) {
     const latestTimestamp = (await provider.getBlock('latest')).timestamp
     let topOfPeriod: number
     const rem = latestTimestamp % PERIOD
+
     if (rem < Math.floor(PERIOD / 2)) {
-      topOfPeriod = latestTimestamp - rem + PERIOD
+      topOfPeriod = latestTimestamp - rem + PERIOD * 2
     } else {
-      topOfPeriod = latestTimestamp + (PERIOD - rem) - COMMIT_PHASE_DURATION
+      topOfPeriod = latestTimestamp + rem + PERIOD * 2
     }
     return topOfPeriod
   }
@@ -262,7 +262,7 @@ export async function initiateVault(params: VaultTestParams) {
 
     for (let i = 0; i < values.length; i++) {
       await volOracle.setPrice(values[i])
-      const topOfPeriod = (await getTopOfPeriod()) + PERIOD
+      const topOfPeriod = await getTopOfPeriod()
       await time.increaseTo(topOfPeriod)
       await volOracle.mockCommit(
         asset === WETH ? UNIV3_ETH_USDC_POOL[CHAINID.ETH_MAINNET] : UNIV3_WBTC_USDC_POOL[CHAINID.ETH_MAINNET]
@@ -283,7 +283,10 @@ export async function initiateVault(params: VaultTestParams) {
     ownerSigner
   )) as OptionsPremiumPricer__factory
 
-  const StrikeSelection = await getContractFactory('DeltaStrikeSelection', ownerSigner)
+  const StrikeSelection = (await getContractFactory(
+    'DeltaStrikeSelection',
+    ownerSigner
+  )) as DeltaStrikeSelection__factory
 
   optionsPremiumPricer = await OptionsPremiumPricer.deploy(
     params.underlying === WETH ? UNIV3_ETH_USDC_POOL[CHAINID.ETH_MAINNET] : UNIV3_WBTC_USDC_POOL[CHAINID.ETH_MAINNET],
@@ -322,7 +325,7 @@ export async function initiateVault(params: VaultTestParams) {
   for (const [i, neuronPoolName] of params.neuronPoolsNames.entries()) {
     const neuronPoolDeployment = await deployments.get(neuronPoolName)
     const neuronPool = INeuronPool__factory.connect(neuronPoolDeployment.address, ownerSigner)
-    await prepareNeuronPool(CHAINID.ETH_MAINNET, neuronPool)
+    await prepareNeuronPool(neuronPool)
     const neuronPoolAddress = neuronPool.address
 
     const neuronPoolPricerName = params.neuronPoolsPricersNames[i]
@@ -386,8 +389,6 @@ export async function initiateVault(params: VaultTestParams) {
     feeRecipient,
     managementFee,
     performanceFee,
-    tokenName,
-    tokenSymbol,
     optionsPremiumPricer.address,
     strikeSelection.address,
     premiumDiscount,
@@ -418,24 +419,24 @@ export async function initiateVault(params: VaultTestParams) {
   for (const collateralVault of collateralVaults) {
     await collateralVault.connect(ownerSigner).setNewKeeper(vault.address)
   }
-
   // Update volatility
   await updateVol(params.underlying)
 
-  onTokenFactory = IONtokenFactory__factory.connect(ON_TOKEN_FACTORY[CHAINID.ETH_MAINNET], ownerSigner)
+  const onTokenFactoryDeployment = await deployments.get('ONtokenFactory')
+  onTokenFactory = IONtokenFactory__factory.connect(onTokenFactoryDeployment.address, ownerSigner)
 
   await whitelistProduct(params.underlying, params.strikeAsset, collateralAssetsAddresses, params.isPut)
 
   const latestTimestamp = (await provider.getBlock('latest')).timestamp
+
   // Create first option
-  firstOptionExpiry = moment(latestTimestamp * 1000)
-    .add(1, 'week')
-    .startOf('isoWeek')
-    .day('friday')
-    .hours(8)
-    .minutes(0)
-    .seconds(0)
-    .unix()
+  // Get closes friday
+  const today = moment(latestTimestamp * 1000)
+  const thisWeekFriday = today.day('friday').hours(8).minutes(0).seconds(0)
+
+  firstOptionExpiry = today.isAfter(thisWeekFriday)
+    ? today.add(1, 'week').startOf('isoWeek').day('friday').hours(8).minutes(0).seconds(0).unix()
+    : thisWeekFriday.unix()
   ;[firstOptionStrike] = await strikeSelection.getStrikePrice(firstOptionExpiry, params.isPut)
 
   firstOptionPremium = BigNumber.from(
@@ -456,7 +457,7 @@ export async function initiateVault(params: VaultTestParams) {
     params.underlying,
     params.strikeAsset,
     collateralAssetsAddresses,
-    collateralAssetsAddresses.map(x => 0),
+    collateralAssetsAddresses.map(() => 0),
     firstOptionStrike,
     firstOptionExpiry,
     params.isPut
@@ -469,9 +470,9 @@ export async function initiateVault(params: VaultTestParams) {
   }
 
   // Create second option
-  secondOptionExpiry = moment(latestTimestamp * 1000)
+  secondOptionExpiry = moment(firstOptionExpiry * 1000)
     .startOf('isoWeek')
-    .add(2, 'week')
+    .add(1, 'week')
     .day('friday')
     .hours(8)
     .minutes(0)
@@ -505,7 +506,7 @@ export async function initiateVault(params: VaultTestParams) {
   defaultONtokenAddress = firstOption.address
   defaultONtoken = IONtoken__factory.connect(defaultONtokenAddress, userSigner)
   usdcContract = IERC20Detailed__factory.connect(USDC, userSigner)
-  assetContract = IERC20Detailed__factory.connect(underlying, userSigner)
+  underlyingContract = IERC20Detailed__factory.connect(underlying, userSigner)
   const addressToDeposit = [userSigner, ownerSigner, adminSigner]
 
   if (params.underlying === WETH) {
@@ -514,6 +515,7 @@ export async function initiateVault(params: VaultTestParams) {
     }
   }
 
+  const marginPoolAddress = (await deployments.get('MarginPool')).address
   return {
     owner,
     keeper,
@@ -544,7 +546,7 @@ export async function initiateVault(params: VaultTestParams) {
     vault,
     onTokenFactory,
     defaultONtoken,
-    assetContract,
+    underlyingContract,
     usdcContract,
     collateralVaults,
     collateralVaultsAddresses,
@@ -568,8 +570,11 @@ export async function initiateVault(params: VaultTestParams) {
     auctionDuration,
     getCurrentOptionExpiry,
     deltaSecondOption: params.deltaSecondOption,
-    expectedMintAmount: params.expectedMintAmount,
     collateralUnwrappedAssets,
     collateralVaultCap: params.collateralVaultCap,
+    marginPoolAddress,
+    getNextOptionReadyAt,
+    strikeAsset: params.strikeAsset,
+    firstOptionExpiry,
   }
 }

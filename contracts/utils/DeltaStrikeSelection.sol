@@ -2,11 +2,13 @@
 pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import {IPriceOracle} from "../interfaces/IPriceOracle.sol";
 import {IOptionsPremiumPricer} from "../interfaces/INeuron.sol";
 import {IVolatilityOracle} from "../interfaces/IVolatilityOracle.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import {Vault} from "../libraries/Vault.sol";
+
+import "hardhat/console.sol";
 
 contract DeltaStrikeSelection is Ownable {
     using SafeMath for uint256;
@@ -74,12 +76,15 @@ contract DeltaStrikeSelection is Ownable {
         returns (uint256 newStrikePrice, uint256 newDelta)
     {
         require(expiryTimestamp > block.timestamp, "Expiry must be in the future!");
+        console.log("expiryTimestamp", expiryTimestamp);
 
         // asset price
         uint256 assetPrice = optionsPremiumPricer.getUnderlyingPrice();
+        console.log("assetPrice", assetPrice);
 
         // asset's annualized volatility
         uint256 annualizedVol = volatilityOracle.annualizedVol(optionsPremiumPricer.pool()).mul(10**10);
+        console.log("annualizedVol", annualizedVol);
 
         // For each asset prices with step of 'step' (down if put, up if call)
         //   if asset's getOptionDelta(currStrikePrice, spotPrice, annualizedVol, t) == (isPut ? 1 - delta:delta)
@@ -89,8 +94,11 @@ contract DeltaStrikeSelection is Ownable {
         uint256 strike = isPut
             ? assetPrice.sub(assetPrice % step).sub(step)
             : assetPrice.add(step - (assetPrice % step)).add(step);
+        console.log("strike", strike);
         uint256 targetDelta = isPut ? DELTA_MULTIPLIER.sub(delta) : delta;
+        console.log("targetDelta", targetDelta);
         uint256 prevDelta = DELTA_MULTIPLIER;
+        console.log("prevDelta", prevDelta);
 
         while (true) {
             uint256 currDelta = optionsPremiumPricer.getOptionDelta(
@@ -111,6 +119,10 @@ contract DeltaStrikeSelection is Ownable {
                 uint256 finalStrike = _getBestStrike(finalDelta, prevDelta, strike, isPut);
                 require(isPut ? finalStrike <= assetPrice : finalStrike >= assetPrice, "Invalid strike price");
                 // make decimals consistent with onToken strike price decimals (10 ** 8)
+                console.log(
+                    "finalStrike.mul(ORACLE_PRICE_MULTIPLIER).div(assetOracleMultiplier)",
+                    finalStrike.mul(ORACLE_PRICE_MULTIPLIER).div(assetOracleMultiplier)
+                );
                 return (finalStrike.mul(ORACLE_PRICE_MULTIPLIER).div(assetOracleMultiplier), finalDelta);
             }
 

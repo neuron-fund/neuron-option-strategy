@@ -52,7 +52,7 @@ runVaultTests('#deposit', async function (params) {
     it('does not inflate the share tokens on initialization', async function () {
       const depositAmount = BigNumber.from('100000000000')
 
-      await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, adminSigner, depositAmount)
+      await depositToNeuronPool(neuronPool, adminSigner, depositAmount)
       await neuronPool.connect(adminSigner).transfer(collateralVault.address, depositAmount)
 
       await depositIntoCollateralVault(collateralVault, neuronPool, BigNumber.from('10000000000'), userSigner)
@@ -62,7 +62,7 @@ runVaultTests('#deposit', async function (params) {
     })
     it('reverts when minimum shares are not minted', async function () {
       const depositAmount = BigNumber.from(minimumSupply).sub(BigNumber.from('1'))
-      await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, depositAmount)
+      await depositToNeuronPool(neuronPool, userSigner, depositAmount)
       const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(userSigner.address)
       const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
       const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))
@@ -79,13 +79,10 @@ runVaultTests('#deposit', async function (params) {
         amount: amount1,
         unredeemedShares: unredeemedShares1,
       } = await collateralVault.depositReceipts(user)
-      console.log('amount1', amount1)
       assert.equal(round1, 1)
       assert.bnEqual(amount1, params.depositAmount)
       assert.bnEqual(unredeemedShares1, BigNumber.from(0))
-      console.log("(await provider.getBlock('latest')).timestamp", (await ethers.provider.getBlock('latest')).timestamp)
       await rollToNextOption()
-      console.log('after roll')
       const {
         round: round2,
         amount: amount2,
@@ -93,9 +90,7 @@ runVaultTests('#deposit', async function (params) {
       } = await collateralVault.depositReceipts(user)
       assert.equal(round2, 1)
       assert.bnEqual(amount2, params.depositAmount)
-      console.log('amount2', amount2)
       assert.bnEqual(unredeemedShares2, BigNumber.from(0))
-      console.log('params.depositAmount', params.depositAmount)
       await depositIntoCollateralVault(collateralVault, neuronPool, params.depositAmount, userSigner)
       assert.bnEqual(await neuronPool.balanceOf(collateralVault.address), params.depositAmount)
       // vault will still hold the vault shares

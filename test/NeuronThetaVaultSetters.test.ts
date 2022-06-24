@@ -151,7 +151,7 @@ runVaultTests('#setters', async function (params) {
       const neuronPool = collateralAssetsContracts[0]
       await collateralVault.connect(ownerSigner).setCap(capAmount)
 
-      await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, userSigner, depositAmount)
+      await depositToNeuronPool(neuronPool, userSigner, depositAmount)
       const collateralBalanceStarted = await neuronPool.connect(userSigner).balanceOf(user)
       const neuronPoolPricePerShare = await neuronPool.connect(userSigner).pricePerShare()
       const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))

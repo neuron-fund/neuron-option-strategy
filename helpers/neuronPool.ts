@@ -8,19 +8,18 @@ import { getAsset } from './funds'
 /**
  * Deposits some assets to NeuronPool before tests so it has non-zero pricePerShare.
  */
-export async function prepareNeuronPool(chainId: number, neuronPool: INeuronPool) {
+export async function prepareNeuronPool(neuronPool: INeuronPool) {
   const depositor = (await ethers.getSigners())[30]
   const assetAddress = await neuronPool.connect(depositor).token()
   const assetContract = await ethers.getContractAt('IERC20Detailed', assetAddress)
   const assetDecimals = await assetContract.connect(depositor).decimals()
   const depositAmount = ethers.utils.parseUnits('100', assetDecimals)
-  await getAsset(chainId, assetAddress, depositAmount, depositor.address)
+  await getAsset(assetAddress, depositAmount, depositor.address)
   await assetContract.connect(depositor).approve(neuronPool.address, depositAmount)
   await neuronPool.connect(depositor).deposit(assetContract.address, depositAmount)
 }
 
 export async function depositToNeuronPool(
-  chainId: number,
   neuronPool: INeuronPool,
   depositor: SignerWithAddress,
   amount: number | BigNumber
@@ -31,7 +30,7 @@ export async function depositToNeuronPool(
   const depositAmount = BigNumber.isBigNumber(amount)
     ? amount
     : ethers.utils.parseUnits(amount.toString(), assetDecimals)
-  await getAsset(chainId, assetAddress, depositAmount, depositor.address)
+  await getAsset(assetAddress, depositAmount, depositor.address)
   await assetContract.connect(depositor).approve(neuronPool.address, depositAmount)
   await neuronPool.connect(depositor).deposit(assetContract.address, depositAmount)
 }

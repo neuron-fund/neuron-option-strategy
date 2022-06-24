@@ -19,7 +19,7 @@ import {
 } from '../constants/externalAddresses'
 import { CHAINID } from '../constants/constants'
 
-export const whalesMainnet = {
+export const whales = {
   [WBTC]: '0xC564EE9f21Ed8A2d8E7e76c085740d5e4c5FaFbE',
   [WETH]: '0xC564EE9f21Ed8A2d8E7e76c085740d5e4c5FaFbE',
   [USDC]: '0xC564EE9f21Ed8A2d8E7e76c085740d5e4c5FaFbE',
@@ -37,14 +37,10 @@ export const whalesMainnet = {
   [CURVE_3CRV_LP_TOKEN]: '0xdD050C0950Cb996230519f928680ea3D7537eCA7',
 } as const
 
-export const whales = {
-  [CHAINID.ETH_MAINNET]: whalesMainnet,
-}
+export type AseetsWithWhales = keyof typeof whales
 
-export type AseetsWithWhales = keyof typeof whalesMainnet
-
-export const getAsset = async (chainId: number, asset: string, amount: BigNumber, recipient: string) => {
-  const whaleAddress = whales[chainId][asset]
+export const getAsset = async (asset: string, amount: BigNumber, recipient: string) => {
+  const whaleAddress = whales[asset]
   if (!whaleAddress) {
     throw new Error(`whale for ${asset} is not defined`)
   }
@@ -54,7 +50,6 @@ export const getAsset = async (chainId: number, asset: string, amount: BigNumber
   })
   const whale = await ethers.getSigner(whaleAddress)
   const assetContract = await ethers.getContractAt('IERC20', asset)
-  const balance = await assetContract.connect(whale).balanceOf(whaleAddress)
   await assetContract.connect(whale).transfer(recipient, amount)
   await network.provider.request({
     method: 'hardhat_stopImpersonatingAccount',

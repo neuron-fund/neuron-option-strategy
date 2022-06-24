@@ -48,30 +48,6 @@ contract NeuronCollateralVault is
     uint256 private constant WEEKS_PER_YEAR = 52142857;
 
     /************************************************
-     *  EVENTS
-     ***********************************************/
-
-    event Deposit(address indexed account, uint256 amount, uint256 round);
-
-    event InitiateWithdraw(address indexed account, uint256 shares, uint256 round);
-
-    event InstantWithdraw(address indexed account, uint256 amount, uint256 round);
-
-    event Redeem(address indexed account, uint256 share, uint256 round);
-
-    event ManagementFeeSet(uint256 managementFee, uint256 newManagementFee);
-
-    event PerformanceFeeSet(uint256 performanceFee, uint256 newPerformanceFee);
-
-    event CapSet(uint256 oldCap, uint256 newCap);
-
-    event Withdraw(address indexed account, uint256 amount, uint256 shares);
-
-    event CollectVaultFees(uint256 performanceFee, uint256 vaultFee, uint256 round, address indexed feeRecipient);
-
-    event OpenShort(uint256 depositAmount, address indexed manager);
-
-    /************************************************
      *  CONSTRUCTOR & INITIALIZATION
      ***********************************************/
 
@@ -640,7 +616,8 @@ contract NeuronCollateralVault is
             uint256 premiumBalance = IERC20(premiumToken).balanceOf(address(this));
             if (premiumBalance != 0) {
                 IERC20(premiumToken).safeApprove(address(collateralToken), premiumBalance);
-                collateralToken.deposit(premiumToken, premiumBalance);
+                uint256 depositReturn = collateralToken.deposit(premiumToken, premiumBalance);
+                emit PremiumSwap(premiumBalance, depositReturn, vaultState.round);
             }
         }
 

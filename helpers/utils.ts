@@ -29,7 +29,7 @@ export async function deployProxy(
   logicDeployParams = [],
   factoryOptions = {}
 ) {
-  const AdminUpgradeabilityProxy = await ethers.getContractFactory('AdminUpgradeabilityProxy', adminSigner)
+  const AdminUpgradeabilityProxy = await ethers.getContractFactory('TransparentUpgradeableProxy', adminSigner)
   const LogicContract = await ethers.getContractFactory(logicContractName, factoryOptions || {})
   const logic = await LogicContract.deploy(...logicDeployParams)
 
@@ -171,7 +171,6 @@ export async function setOpynOracleExpiryPriceNeuron(
 
   let receipt
   for (const collateralPricer of collateralPricers) {
-    console.log('collateralPricer', collateralPricer.address)
     const res2 = await collateralPricer.connect(oracleOwnerSigner).setExpiryPriceInOracle(expiry)
     receipt = await res2.wait()
   }
@@ -265,7 +264,6 @@ export const convertPriceAmount = async (tokenIn: string, tokenOut: string, amou
     tokenInDecimals > tokenOutDecimals
       ? tokenInValue.div(outPrice).div(decimalShift)
       : tokenInValue.mul(decimalShift).div(outPrice)
-  // console.log('convertPriceAmount ~ newReturn', newReturn)
 
   return newReturn
 }
@@ -293,7 +291,7 @@ export async function bidForONToken(
   let bid = wmul(totalOptionsAvailableToBuy.mul(BigNumber.from(10).pow(10)), premium)
   const queueStartElement = '0x0000000000000000000000000000000000000000000000000000000000000001'
 
-  await getAsset(CHAINID.ETH_MAINNET, biddingTokenContract.address, bid, contractSigner)
+  await getAsset(biddingTokenContract.address, bid, contractSigner)
 
   await biddingTokenContract.connect(userSigner).approve(gnosisAuction.address, bid.toString())
 
@@ -307,8 +305,6 @@ export async function bidForONToken(
       [queueStartElement],
       '0x'
     )
-
-  console.log('after placeSellOrders')
 
   await increaseTo((await provider.getBlock('latest')).timestamp + auctionDuration)
 

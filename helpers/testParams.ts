@@ -20,7 +20,6 @@ export const NeuronEthThetaVaultPutTestParams: VaultTestParams = {
   deltaStep: getDeltaStep('WETH'),
   depositAmount: BigNumber.from(10).pow(18).mul(5000),
   minimumSupply: BigNumber.from(10).pow(3).toString(),
-  expectedMintAmount: BigNumber.from('4761904761'),
   premiumDiscount: BigNumber.from('997'),
   managementFee: BigNumber.from('2000000'),
   performanceFee: BigNumber.from('20000000'),

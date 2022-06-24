@@ -12,7 +12,7 @@ export async function depositIntoCollateralVault(
   signer: SignerWithAddress
 ) {
   const depositAmount = amount
-  await depositToNeuronPool(CHAINID.ETH_MAINNET, neuronPool, signer, depositAmount)
+  await depositToNeuronPool(neuronPool, signer, depositAmount)
   const collateralBalanceStarted = await neuronPool.connect(signer).balanceOf(signer.address)
   const neuronPoolPricePerShare = await neuronPool.connect(signer).pricePerShare()
   const withdrawAmount = neuronPoolPricePerShare.mul(collateralBalanceStarted).div(BigNumber.from(10).pow(18))

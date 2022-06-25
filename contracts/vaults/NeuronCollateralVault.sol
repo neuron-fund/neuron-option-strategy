@@ -132,6 +132,7 @@ contract NeuronCollateralVault is
      */
     function setNewKeeper(address newKeeper) external onlyOwner {
         require(newKeeper != address(0), "!newKeeper");
+        emit NewKeeperSet(keeper, newKeeper);
         keeper = newKeeper;
     }
 
@@ -504,6 +505,7 @@ contract NeuronCollateralVault is
             uint256 index = _round + i;
             require(roundPricePerShare[index] == 0, "Initialized"); // AVOID OVERWRITING ACTUAL VALUES
             roundPricePerShare[index] = ShareMath.PLACEHOLDER_UINT;
+            emit RoundInit(index);
         }
     }
 

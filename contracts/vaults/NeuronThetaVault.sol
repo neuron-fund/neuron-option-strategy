@@ -90,6 +90,18 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
     event AuctionDurationSet(uint256 auctionDuration, uint256 newAuctionDuration);
 
+    event StrikeSelectionSet(address indexed strikeSelection, address indexed newStrikeSelection);
+
+    event OptionsPremiumPricerSet(address indexed optionsPremiumPricer, address indexed newOptionsPremiumPricer);
+
+    event StrikePriceSet(uint16 indexed round, uint16 indexed newRound, uint256 strikePrice, uint256 newStrikePrice);
+
+    event AuctionStarted(GnosisAuction.AuctionDetails auctionDetails, uint256 indexed optionAuctionID);
+
+    event NewKeeperSet(address indexed keeper, address indexed newKeeper);
+
+    event FeeRecipientSet(address indexed feeRecipient, address indexed newFeeRecipient);
+
     /************************************************
      *  CONSTRUCTOR & INITIALIZATION
      ***********************************************/
@@ -232,6 +244,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      */
     function setStrikeSelection(address newStrikeSelection) external onlyOwner {
         require(newStrikeSelection != address(0), "!newStrikeSelection");
+        emit StrikeSelectionSet(strikeSelection, newStrikeSelection);
         strikeSelection = newStrikeSelection;
     }
 
@@ -241,6 +254,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      */
     function setOptionsPremiumPricer(address newOptionsPremiumPricer) external onlyOwner {
         require(newOptionsPremiumPricer != address(0), "!newOptionsPremiumPricer");
+        emit OptionsPremiumPricerSet(optionsPremiumPricer, newOptionsPremiumPricer);
         optionsPremiumPricer = newOptionsPremiumPricer;
     }
 
@@ -250,8 +264,10 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      */
     function setStrikePrice(uint128 strikePrice) external onlyOwner nonReentrant {
         require(strikePrice > 0, "!strikePrice");
+        uint16 round = vaultState.round;
+        emit StrikePriceSet(lastStrikeOverrideRound, round, overriddenStrikePrice, strikePrice);
         overriddenStrikePrice = strikePrice;
-        lastStrikeOverrideRound = vaultState.round;
+        lastStrikeOverrideRound = round;
     }
 
     /**
@@ -383,6 +399,8 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
         auctionDetails.duration = auctionDuration;
 
         optionAuctionID = VaultLifecycle.startAuction(auctionDetails);
+
+        emit AuctionStarted(auctionDetails, optionAuctionID);
     }
 
     function getCollateralAssets() external view returns (address[] memory) {
@@ -428,6 +446,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      */
     function setNewKeeper(address newKeeper) external onlyOwner {
         require(newKeeper != address(0), "!newKeeper");
+        emit NewKeeperSet(keeper, newKeeper);
         keeper = newKeeper;
     }
 
@@ -438,6 +457,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
     function setFeeRecipient(address newFeeRecipient) external onlyOwner {
         require(newFeeRecipient != address(0), "!newFeeRecipient");
         require(newFeeRecipient != feeRecipient, "Must be new feeRecipient");
+        emit FeeRecipientSet(feeRecipient, newFeeRecipient);
         feeRecipient = newFeeRecipient;
     }
 

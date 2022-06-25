@@ -27,6 +27,10 @@ interface INeuronCollateralVault {
     event OpenShort(uint256 depositAmount, address indexed manager);
 
     event PremiumSwap(uint256 recievedAmount, uint256 swapResultAmount, uint256 round);
+    
+    event NewKeeperSet(address indexed keeper, address indexed newKeeper);
+
+    event RoundInit(uint256 indexed round);
 
     function rollToNextOption() external returns (uint256 lockedAmountInCollateral, uint256 lockedAmountInAsset);
 

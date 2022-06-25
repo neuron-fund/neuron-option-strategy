@@ -109,13 +109,11 @@ library NeuronPoolUtils {
      * @param amount is the amount of `asset` to withdraw
      * @param asset is the vault asset address
      * @param collateralToken is the address of the collateral token
-     * @param yearnWithdrawalBuffer is the buffer for withdrawals from yearn vault
      */
     function unwrapYieldToken(
         uint256 amount,
         address asset,
-        address collateralToken,
-        uint256 yearnWithdrawalBuffer
+        address collateralToken
     ) external {
         uint256 assetBalance = IERC20(asset).balanceOf(address(this));
         INeuronPool collateral = INeuronPool(collateralToken);
@@ -126,9 +124,6 @@ library NeuronPoolUtils {
         );
 
         if (amountToUnwrap > 0) {
-            amountToUnwrap = amountToUnwrap.add(amountToUnwrap.mul(yearnWithdrawalBuffer).div(10000)).sub(1);
-
-            console.log("amountToUnwrap", amountToUnwrap);
             collateral.withdraw(asset, amountToUnwrap);
         }
     }

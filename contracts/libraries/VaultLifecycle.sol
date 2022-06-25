@@ -446,7 +446,6 @@ library VaultLifecycle {
         address weth
     ) external {
         uint256 balance = IERC20(tokenIn).balanceOf(address(this));
-        // TODO neuron can we get rid of approve zero?
         if (balance > 0) {
             UniswapRouter.swap(address(this), tokenIn, tokenOut, balance, minAmountOut, router, weth);
         }

@@ -451,14 +451,11 @@ runVaultTests('#rollToNextOption', async function (params) {
           .div(BigNumber.from(100).mul(BigNumber.from(10).pow(6)))
       )
 
-      let dustForWithdraw = queuedWithdrawAmount.mul(await collateralVault.COLLATERAL_WITHDRAWAL_BUFFER()).div(10000)
-
-      assert.bnLt(vaultFees, secondInitialBalance.sub(await collateralVault.totalBalance()).add(dustForWithdraw))
+      assert.bnLt(vaultFees, secondInitialBalance.sub(await collateralVault.totalBalance()))
       assert.bnGt(
         vaultFees,
         secondInitialBalance
           .sub(await collateralVault.totalBalance())
-          .add(dustForWithdraw)
           .mul(99)
           .div(100)
       )

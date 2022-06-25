@@ -40,9 +40,6 @@ contract NeuronCollateralVault is
     /// @notice USDC 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
     address public immutable USDC;
 
-    /// @notice Withdrawal buffer for yearn vault
-    uint256 public constant COLLATERAL_WITHDRAWAL_BUFFER = 5; // 0.05%
-
     // Number of weeks per year = 52.142857 weeks * FEE_MULTIPLIER = 52142857
     // Dividing by weeks per year requires doing num.mul(FEE_MULTIPLIER).div(WEEKS_PER_YEAR)
     uint256 private constant WEEKS_PER_YEAR = 52142857;
@@ -420,7 +417,7 @@ contract NeuronCollateralVault is
      * @notice Withdraws the assets on the vault using the outstanding `DepositReceipt.amount`
      * @param amount is the amount to withdraw
      */
-    function withdrawInstantly(uint256 amount) external nonReentrant {
+    function withdrawInstantly(uint256 amount, address _withdrawToken) external nonReentrant {
         Vault.DepositReceipt storage depositReceipt = depositReceipts[msg.sender];
 
         uint256 currentRound = vaultState.round;
@@ -437,15 +434,12 @@ contract NeuronCollateralVault is
 
         emit InstantWithdraw(msg.sender, amount, currentRound);
 
-        console.log("withdrawInstantly ~ unwrapYieldToken BEFORE");
-        NeuronPoolUtils.unwrapYieldToken(
-            amount,
-            vaultParams.asset,
-            address(collateralToken),
-            COLLATERAL_WITHDRAWAL_BUFFER
-        );
-        console.log("withdrawInstantly ~ unwrapYieldToken AFTER");
-        NeuronPoolUtils.transferAsset(WETH, vaultParams.asset, msg.sender, amount);
+        if (_withdrawToken == address(collateralToken)) {
+            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, amount);
+        } else {
+            NeuronPoolUtils.unwrapYieldToken(amount, _withdrawToken, address(collateralToken));
+            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, amount);
+        }
     }
 
     /**
@@ -460,7 +454,6 @@ contract NeuronCollateralVault is
      * @notice Completes a scheduled withdrawal from a past round. Uses finalized pps for the round
      * @return withdrawAmount the current withdrawal amount
      */
-    //  TODO add withdrawal token of choice
     function _completeWithdraw(address _withdrawToken) internal returns (uint256) {
         Vault.Withdrawal storage withdrawal = withdrawals[msg.sender];
 
@@ -490,12 +483,7 @@ contract NeuronCollateralVault is
         if (_withdrawToken == address(collateralToken)) {
             NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, withdrawAmount);
         } else {
-            NeuronPoolUtils.unwrapYieldToken(
-                withdrawAmount,
-                _withdrawToken,
-                address(collateralToken),
-                COLLATERAL_WITHDRAWAL_BUFFER
-            );
+            NeuronPoolUtils.unwrapYieldToken(withdrawAmount, _withdrawToken, address(collateralToken));
             NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, withdrawAmount);
         }
 
@@ -530,29 +518,18 @@ contract NeuronCollateralVault is
         lastQueuedWithdrawAmount = queuedWithdrawAmount;
 
         // Locked balance denominated in `collateralToken`
-        // there is a slight imprecision with regards to calculating back from yearn token -> underlying
-        // that stems from miscoordination between ytoken .deposit() amount wrapped and pricePerShare
-        // at that point in time.
-        // ex: if I have 1 eth, deposit 1 eth into yearn vault and calculate value of yearn token balance
-        // denominated in eth (via balance(yearn token) * pricePerShare) we will get 1 eth - 1 wei.
 
-        // We are subtracting `collateralAsset` balance by queuedWithdrawAmount denominated in `collateralAsset` plus
-        // a buffer for withdrawals taking into account slippage from yearn vault
+        // We are subtracting `collateralAsset` balance by queuedWithdrawAmount denominated in `collateralAsset`
 
         uint256 collateralPricePerShare = collateralToken.pricePerShare();
 
-        console.log(
-            "rollToNextOption ~ collateralToken.balanceOf(address(this))",
-            collateralToken.balanceOf(address(this))
-        );
         uint256 lockedBalanceInCollateralToken = collateralToken.balanceOf(address(this)).sub(
             DSMath.wdiv(
-                queuedWithdrawAmount.add(queuedWithdrawAmount.mul(COLLATERAL_WITHDRAWAL_BUFFER).div(10000)),
+                queuedWithdrawAmount,
                 collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
             )
         );
 
-        console.log("rollToNextOption ~ lockedBalanceInCollateralToken", lockedBalanceInCollateralToken);
         uint256 lockedBalanceInAsset = DSMath.wmul(
             lockedBalanceInCollateralToken,
             collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))

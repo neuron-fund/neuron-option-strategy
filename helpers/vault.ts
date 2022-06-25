@@ -6,14 +6,11 @@ import {
   ETH_PRICE_ORACLE,
   BTC_PRICE_ORACLE,
   USDC_PRICE_ORACLE,
-  UNIV3_ETH_USDC_POOL,
-  UNIV3_WBTC_USDC_POOL,
   GAMMA_CONTROLLER,
   MARGIN_POOL,
   ON_TOKEN_FACTORY,
   GNOSIS_EASY_AUCTION,
   DEX_ROUTER,
-  CHAINID,
 } from '../constants/constants'
 import {
   deployProxy,
@@ -24,7 +21,7 @@ import {
   setOpynOracleExpiryPriceNeuron,
 } from '../helpers/utils'
 import { prepareNeuronPool } from '../helpers/neuronPool'
-import { USDC, WETH } from '../constants/externalAddresses'
+import { UNIV3_ETH_USDC_POOL, UNIV3_WBTC_USDC_POOL, USDC, WETH } from '../constants/externalAddresses'
 import {
   CollateralVaultLifecycle,
   IERC20Detailed,
@@ -264,9 +261,7 @@ export async function initiateVault(params: VaultTestParams) {
       await volOracle.setPrice(values[i])
       const topOfPeriod = await getTopOfPeriod()
       await time.increaseTo(topOfPeriod)
-      await volOracle.mockCommit(
-        asset === WETH ? UNIV3_ETH_USDC_POOL[CHAINID.ETH_MAINNET] : UNIV3_WBTC_USDC_POOL[CHAINID.ETH_MAINNET]
-      )
+      await volOracle.mockCommit(asset === WETH ? UNIV3_ETH_USDC_POOL : UNIV3_WBTC_USDC_POOL)
     }
   }
 
@@ -274,9 +269,7 @@ export async function initiateVault(params: VaultTestParams) {
 
   volOracle = await TestVolOracleFactory.deploy(PERIOD, 7)
 
-  await volOracle.initPool(
-    underlying === WETH ? UNIV3_ETH_USDC_POOL[CHAINID.ETH_MAINNET] : UNIV3_WBTC_USDC_POOL[CHAINID.ETH_MAINNET]
-  )
+  await volOracle.initPool(underlying === WETH ? UNIV3_ETH_USDC_POOL : UNIV3_WBTC_USDC_POOL)
 
   const OptionsPremiumPricer = (await getContractFactory(
     'OptionsPremiumPricer',
@@ -289,10 +282,10 @@ export async function initiateVault(params: VaultTestParams) {
   )) as DeltaStrikeSelection__factory
 
   optionsPremiumPricer = await OptionsPremiumPricer.deploy(
-    params.underlying === WETH ? UNIV3_ETH_USDC_POOL[CHAINID.ETH_MAINNET] : UNIV3_WBTC_USDC_POOL[CHAINID.ETH_MAINNET],
+    params.underlying === WETH ? UNIV3_ETH_USDC_POOL : UNIV3_WBTC_USDC_POOL,
     volOracle.address,
-    params.underlying === WETH ? ETH_PRICE_ORACLE[CHAINID.ETH_MAINNET] : BTC_PRICE_ORACLE[CHAINID.ETH_MAINNET],
-    USDC_PRICE_ORACLE[CHAINID.ETH_MAINNET]
+    params.underlying === WETH ? ETH_PRICE_ORACLE : BTC_PRICE_ORACLE,
+    USDC_PRICE_ORACLE
   )
 
   strikeSelection = await StrikeSelection.deploy(
@@ -310,7 +303,7 @@ export async function initiateVault(params: VaultTestParams) {
   const NeuronPoolUtils = await ethers.getContractFactory('NeuronPoolUtils')
   neuronPoolUtilsLib = (await NeuronPoolUtils.deploy()) as NeuronPoolUtils
 
-  gnosisAuction = IGnosisAuction__factory.connect(GNOSIS_EASY_AUCTION[CHAINID.ETH_MAINNET], ownerSigner)
+  gnosisAuction = IGnosisAuction__factory.connect(GNOSIS_EASY_AUCTION, ownerSigner)
 
   for (const additionalPricer of params?.additionalPricersNames || []) {
     const additionalPricerDeployment = await deployments.get(additionalPricer.pricerName)
@@ -396,15 +389,7 @@ export async function initiateVault(params: VaultTestParams) {
     [isPut, tokenDecimals, collateralAssetsAddresses, underlying, collateralVaultsAddresses],
   ]
 
-  const vaultDeployArgs = [
-    WETH,
-    USDC,
-    ON_TOKEN_FACTORY[CHAINID.ETH_MAINNET],
-    GAMMA_CONTROLLER[CHAINID.ETH_MAINNET],
-    MARGIN_POOL[CHAINID.ETH_MAINNET],
-    GNOSIS_EASY_AUCTION[CHAINID.ETH_MAINNET],
-    DEX_ROUTER[CHAINID.ETH_MAINNET],
-  ]
+  const vaultDeployArgs = [WETH, USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION, DEX_ROUTER]
 
   vault = (
     await deployProxy('NeuronThetaVault', adminSigner, vaultInitializeArgs, vaultDeployArgs, {

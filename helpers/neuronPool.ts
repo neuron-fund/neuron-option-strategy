@@ -13,7 +13,7 @@ export async function prepareNeuronPool(neuronPool: INeuronPool) {
   const assetAddress = await neuronPool.connect(depositor).token()
   const assetContract = await ethers.getContractAt('IERC20Detailed', assetAddress)
   const assetDecimals = await assetContract.connect(depositor).decimals()
-  const depositAmount = ethers.utils.parseUnits('100', assetDecimals)
+  const depositAmount = ethers.utils.parseUnits('1', assetDecimals)
   await getAsset(assetAddress, depositAmount, depositor.address)
   await assetContract.connect(depositor).approve(neuronPool.address, depositAmount)
   await neuronPool.connect(depositor).deposit(assetContract.address, depositAmount)

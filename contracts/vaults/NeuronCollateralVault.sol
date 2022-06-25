@@ -47,6 +47,9 @@ contract NeuronCollateralVault is
     // Dividing by weeks per year requires doing num.mul(FEE_MULTIPLIER).div(WEEKS_PER_YEAR)
     uint256 private constant WEEKS_PER_YEAR = 52142857;
 
+    /// @notice Token address used to identify ETH deposits in NeuronPools
+    address public constant NEURON_POOL_ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
     /************************************************
      *  CONSTRUCTOR & INITIALIZATION
      ***********************************************/
@@ -187,51 +190,65 @@ contract NeuronCollateralVault is
 
     /**
      * @notice Deposits the `asset` from msg.sender.
-     * @param amount is the amount of `asset` to deposit
+     * @param _amount is the amount of `asset` to deposit
      */
-    //  TODO deposit with ETH
-    function deposit(uint256 amount, address _depositToken) external nonReentrant {
-        require(amount > 0, "!amount");
+    function deposit(uint256 _amount, address _depositToken) external payable nonReentrant {
+        require(_amount > 0, "!amount");
         require(allowedDepositTokens[_depositToken], "!_depositToken");
-        // An approve() by the msg.sender is required beforehand
-        IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), amount);
-        _depositWithToken(amount, msg.sender, _depositToken);
+
+        if (_depositToken == NEURON_POOL_ETH) {
+            require(msg.value == _amount, "deposit ETH: msg.value != _amount");
+        } else {
+            require(msg.value == 0, "deposit non-ETH: msg.value != 0");
+        }
+
+        _depositWithToken(_amount, msg.sender, _depositToken);
     }
 
     /**
      * @notice Deposits the `asset` from msg.sender added to `creditor`'s deposit.
      * @notice Used for vault -> vault deposits on the user's behalf
-     * @param amount is the amount of `asset` to deposit
-     * @param creditor is the address that can claim/withdraw deposited amount
+     * @param _amount is the amount of `asset` to deposit
+     * @param _creditor is the address that can claim/withdraw deposited amount
      */
-    //  TODO depositFor with ETH
     function depositFor(
-        uint256 amount,
-        address creditor,
+        uint256 _amount,
+        address _creditor,
         address _depositToken
-    ) external nonReentrant {
-        require(amount > 0, "!amount");
-        require(creditor != address(0), "!creditor");
+    ) external payable nonReentrant {
+        require(_amount > 0, "!amount");
+        require(_creditor != address(0), "!creditor");
         require(allowedDepositTokens[_depositToken], "!_depositToken");
-        // An approve() by the msg.sender is required beforehand
-        IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), amount);
-        _depositWithToken(amount, creditor, _depositToken);
+
+        if (_depositToken == NEURON_POOL_ETH) {
+            require(msg.value == _amount, "deposit ETH: msg.value != _amount");
+        } else {
+            require(msg.value == 0, "deposit non-ETH: msg.value != 0");
+        }
+
+        _depositWithToken(_amount, _creditor, _depositToken);
     }
 
     function _depositWithToken(
-        uint256 amount,
-        address creditor,
+        uint256 _amount,
+        address _creditor,
         address _depositToken
     ) internal {
+        if (_depositToken != NEURON_POOL_ETH) {
+            IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), _amount);
+        }
+
         // TODO remove deposit with asset
         if (_depositToken == vaultParams.asset) {
-            _depositFor(amount, creditor);
+            _depositFor(_amount, _creditor);
         } else if (_depositToken == vaultParams.collateralAsset) {
-            _depositYieldToken(amount, creditor);
+            _depositYieldToken(_amount, _creditor);
         } else {
-            IERC20(_depositToken).safeApprove(address(collateralToken), amount);
-            uint256 mintedCollateralTokens = collateralToken.deposit(_depositToken, amount);
-            _depositYieldToken(mintedCollateralTokens, creditor);
+            if (_depositToken != NEURON_POOL_ETH) {
+                IERC20(_depositToken).safeApprove(address(collateralToken), _amount);
+            }
+            uint256 mintedCollateralTokens = collateralToken.deposit{value: _amount}(_depositToken, _amount);
+            _depositYieldToken(mintedCollateralTokens, _creditor);
         }
     }
 
@@ -255,7 +272,6 @@ contract NeuronCollateralVault is
      * @param creditor is the address to receieve the deposit
      */
     function _depositFor(uint256 amount, address creditor) private {
-        console.log("_depositFor ~ amount", amount);
         uint256 currentRound = vaultState.round;
         uint256 totalWithDepositedAmount = totalBalance();
         require(totalWithDepositedAmount <= vaultParams.cap, "Exceed cap");

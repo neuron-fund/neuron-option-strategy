@@ -75,11 +75,11 @@ runVaultTests('#commitAndClose', async function (params) {
 
     it('sets the correct strike when overriding strike price', async function () {
       const WETH_STRIKE_PRICE = {
-        [CHAINID.ETH_MAINNET]: 250000000000, // WETH
+        : 250000000000, // WETH
       }
 
       const altStrikePrice = '405000000000'
-      const newStrikePrice = params.underlying === WETH ? WETH_STRIKE_PRICE[CHAINID.ETH_MAINNET] : altStrikePrice
+      const newStrikePrice = params.underlying === WETH ? WETH_STRIKE_PRICE : altStrikePrice
 
       await vault.connect(ownerSigner).setStrikePrice(newStrikePrice)
 
@@ -134,7 +134,7 @@ runVaultTests('#commitAndClose', async function (params) {
 
       await rollToSecondOption(firstOption.strikePrice)
 
-      const controller = await ethers.getContractAt('IController', GAMMA_CONTROLLER[CHAINID.ETH_MAINNET])
+      const controller = await ethers.getContractAt('IController', GAMMA_CONTROLLER)
 
       assert.bnEqual(await controller.accountVaultCounter(vault.address), BigNumber.from(2))
     })

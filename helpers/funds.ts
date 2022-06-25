@@ -16,8 +16,9 @@ import {
   USDT,
   WBTC,
   WETH,
+  STE_CRV,
+  CURVE_ALETH_LP_TOKEN,
 } from '../constants/externalAddresses'
-import { CHAINID } from '../constants/constants'
 
 export const whales = {
   [WBTC]: '0xC564EE9f21Ed8A2d8E7e76c085740d5e4c5FaFbE',
@@ -35,6 +36,8 @@ export const whales = {
   [MIMUST]: '0xcd468d6421a6c5109d6c29698548b2af46a5e21b',
   [MIM3CRV]: '0xe896e539e557bc751860a7763c8dd589af1698ce',
   [CURVE_3CRV_LP_TOKEN]: '0xdD050C0950Cb996230519f928680ea3D7537eCA7',
+  [STE_CRV]: '0x43378368D84D4bA00D1C8E97EC2E6016A82fC062',
+  [CURVE_ALETH_LP_TOKEN]: '0x084d0cd0605f47D92Dc2DFD22238e9c5605023E9',
 } as const
 
 export type AseetsWithWhales = keyof typeof whales

@@ -132,14 +132,14 @@ runVaultTests('#maxRedeem', async function (params) {
       const beforePps = await collateralVault.pricePerShare()
 
       const AMOUNT = {
-        [CHAINID.ETH_MAINNET]: '100000000000',
+        : '100000000000',
         [CHAINID.AVAX_MAINNET]: '1000000000',
         [CHAINID.AURORA_MAINNET]: '1000000000',
       }
 
       const settlementPriceITM = isPut
-        ? firstOptionStrike.sub(AMOUNT[CHAINID.ETH_MAINNET])
-        : firstOptionStrike.add(AMOUNT[CHAINID.ETH_MAINNET])
+        ? firstOptionStrike.sub(AMOUNT)
+        : firstOptionStrike.add(AMOUNT)
 
       await setOpynOracleExpiryPriceNeuron(
         params.underlying,

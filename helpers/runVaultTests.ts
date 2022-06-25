@@ -8,12 +8,13 @@ type RunVaultTestsCallback = (params: InitVaultReturn) => Promise<() => void>
 
 export function runVaultTests(describeTitle: string, testsCallback: RunVaultTestsCallback) {
   describe(describeTitle, () => {
-    let beforeSnapshotId: string
+    let beforeDeploySnapshotId: string
 
     before(async () => {
-      beforeSnapshotId = await takeSnapshot()
-      process.on('exit', async () => await revertToSnapShot(beforeSnapshotId))
+      beforeDeploySnapshotId = await takeSnapshot()
+      process.on('exit', async () => await revertToSnapShot(beforeDeploySnapshotId))
 
+      // Firstly deploys all the vaults and register all tests
       for (const testParam of testsParams) {
         let initParams: InitVaultReturn
         let tests: () => void
@@ -21,23 +22,34 @@ export function runVaultTests(describeTitle: string, testsCallback: RunVaultTest
           initParams = await initiateVault(testParam)
           tests = await testsCallback(initParams)
         } catch (e) {
-          await revertToSnapShot(beforeSnapshotId)
+          await revertToSnapShot(beforeDeploySnapshotId)
           throw e
         }
-        let initSnapshotId = await takeSnapshot()
 
+        // Then runs test for each test param
         describe(`${describeTitle}: ${testParam.name}`, () => {
-          tests()
-          after(async () => {
-            await revertToSnapShot(beforeSnapshotId)
+          let beforeItRunSnapshotId
+          before(async () => {
+            beforeItRunSnapshotId = await takeSnapshot()
           })
           afterEach(async () => {
-            await revertToSnapShot(initSnapshotId)
+            await revertToSnapShot(beforeItRunSnapshotId)
             // If we dont take snapshot again it wont revert second time for some reason
-            initSnapshotId = await takeSnapshot()
+            beforeItRunSnapshotId = await takeSnapshot()
           })
+          tests()
         })
       }
+
+      // After all revert to clean state
+      describe('revert to before test', () => {
+        after(async () => {
+          await revertToSnapShot(beforeDeploySnapshotId)
+        })
+
+        // Required for "after" to work
+        it.skip('', () => {})
+      })
     })
 
     // Dummy test, without it "before" hook wont work therefore wont not create other tests

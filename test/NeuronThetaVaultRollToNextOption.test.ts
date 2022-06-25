@@ -93,7 +93,7 @@ runVaultTests('#rollToNextOption', async function (params) {
         depositAmount.toString()
       )
 
-      assert.bnGt(await defaultONtoken.balanceOf(GNOSIS_EASY_AUCTION[CHAINID.ETH_MAINNET]), BigNumber.from(0))
+      assert.bnGt(await defaultONtoken.balanceOf(GNOSIS_EASY_AUCTION), BigNumber.from(0))
 
       assert.equal(await vault.currentOption(), defaultONtokenAddress)
     })
@@ -171,7 +171,7 @@ runVaultTests('#rollToNextOption', async function (params) {
       // 100% of the vault's balance is allocated to short
       assert.bnEqual(await neuronPool.balanceOf(collateralVault.address), BigNumber.from(0))
 
-      await expect(vault.connect(ownerSigner).commitAndClose()).to.be.revertedWith(EXPECTED_ERROR[CHAINID.ETH_MAINNET])
+      await expect(vault.connect(ownerSigner).commitAndClose()).to.be.revertedWith(EXPECTED_ERROR)
     })
 
     it('withdraws and roll funds into next option, after expiry ITM', async function () {

@@ -96,6 +96,8 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
     event FeeRecipientSet(address indexed feeRecipient, address indexed newFeeRecipient);
 
+    event PremiumDistribute(address indexed collateralVault, uint256 amount);
+
     /************************************************
      *  CONSTRUCTOR & INITIALIZATION
      ***********************************************/
@@ -385,7 +387,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
                     roundCollateralVaults[i],
                     collateralVaultPremiumShare
                 );
-                // TODO event how much premium share was transfered for current collateral vault
             }
             if (collateralAssetBalance != 0) {
                 NeuronPoolUtils.transferAsset(
@@ -396,6 +397,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
                 );
             }
             INeuronCollateralVault(roundCollateralVaults[i]).commitAndClose(auctionBiddingToken);
+            emit PremiumDistribute(roundCollateralVaults[i], collateralVaultPremiumShare);
         }
     }
 

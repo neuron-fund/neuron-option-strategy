@@ -3,7 +3,7 @@ pragma solidity 0.7.6;
 
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {SafeMathLegacy} from "../libraries/SafeMathLegacy.sol";
-import {DSMath} from "../libraries/DSMath.sol";
+import {DSMath} from "../../vendor/DSMath.sol";
 import {OracleLibrary} from "../libraries/OracleLibrary.sol";
 import {Welford} from "../libraries/Welford.sol";
 import {IERC20DetailedLegacy} from "../interfaces/IERC20DetailedLegacy.sol";
@@ -12,7 +12,7 @@ import {PRBMathSD59x18} from "../libraries/PRBMathSD59x18.sol";
 
 import "hardhat/console.sol";
 
-abstract contract VolOracle is DSMath {
+abstract contract VolOracle {
     using SafeMathLegacy for uint256;
 
     /**
@@ -91,7 +91,7 @@ abstract contract VolOracle is DSMath {
 
         uint256 price = getPrice(pool);
         uint256 _lastPrice = lastPrices[pool];
-        uint256 periodReturn = _lastPrice > 0 ? wdiv(price, _lastPrice) : 0;
+        uint256 periodReturn = _lastPrice > 0 ? DSMath.wdiv(price, _lastPrice) : 0;
 
         require(price > 0, "Price from oracle is 0");
 

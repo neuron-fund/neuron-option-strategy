@@ -3,14 +3,14 @@ pragma solidity 0.7.6;
 
 import {IVolatilityOracleLegacy} from "./interfaces/IVolatilityOracleLegacy.sol";
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
-import {DSMath} from "./libraries/DSMath.sol";
+import {DSMath} from "../vendor/DSMath.sol";
 import {IERC20DetailedLegacy} from "./interfaces/IERC20DetailedLegacy.sol";
 import {Math} from "./libraries/Math.sol";
 import {SafeMathLegacy} from "./libraries/SafeMathLegacy.sol";
 
 import "hardhat/console.sol";
 
-contract OptionsPremiumPricer is DSMath {
+contract OptionsPremiumPricer {
     using SafeMathLegacy for uint256;
 
     /**
@@ -86,8 +86,8 @@ contract OptionsPremiumPricer is DSMath {
         // Make option premium denominated in the underlying
         // asset for call vaults and USDC for put vaults
         premium = isPut
-            ? wdiv(put, stablesOracle.latestAnswer().mul(assetOracleMultiplier))
-            : wdiv(call, spotPrice.mul(assetOracleMultiplier));
+            ? DSMath.wdiv(put, stablesOracle.latestAnswer().mul(assetOracleMultiplier))
+            : DSMath.wdiv(call, spotPrice.mul(assetOracleMultiplier));
 
         // Convert to 18 decimals
         premium = premium.mul(assetOracleMultiplier);
@@ -186,10 +186,10 @@ contract OptionsPremiumPricer is DSMath {
 
         if (sp > st) {
             _c = blackScholes(t, v, sp, st);
-            _p = max(_c.add(st), sp) == sp ? 0 : _c.add(st).sub(sp);
+            _p = DSMath.max(_c.add(st), sp) == sp ? 0 : _c.add(st).sub(sp);
         } else {
             _p = blackScholes(t, v, st, sp);
-            _c = max(_p.add(sp), st) == st ? 0 : _p.add(sp).sub(st);
+            _c = DSMath.max(_p.add(sp), st) == st ? 0 : _p.add(sp).sub(st);
         }
 
         return (_c, _p);

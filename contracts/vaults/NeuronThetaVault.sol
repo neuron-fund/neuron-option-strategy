@@ -4,7 +4,6 @@ pragma solidity 0.8.9;
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {DSMath} from "../vendor/DSMath.sol";
 import {GnosisAuction} from "../libraries/GnosisAuction.sol";
 import {Vault} from "../libraries/Vault.sol";
 import {ShareMath} from "../libraries/ShareMath.sol";

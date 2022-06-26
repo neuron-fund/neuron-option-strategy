@@ -3,14 +3,14 @@ pragma solidity 0.7.6;
 
 import {SafeMathLegacy} from "./libraries/SafeMathLegacy.sol";
 import {Welford} from "./libraries/Welford.sol";
-import {DSMath} from "./libraries/DSMath.sol";
+import {DSMath} from "../vendor/DSMath.sol";
 import {VolOracle} from "./core/VolOracle.sol";
 import {Math} from "./libraries/Math.sol";
 import {PRBMathSD59x18} from "./libraries/PRBMathSD59x18.sol";
 
 import "hardhat/console.sol";
 
-contract TestVolOracle is DSMath, VolOracle {
+contract TestVolOracle is VolOracle {
     using SafeMathLegacy for uint256;
     uint256 private _price;
 
@@ -25,7 +25,7 @@ contract TestVolOracle is DSMath, VolOracle {
 
         uint256 price = getPrice(pool);
         uint256 _lastPrice = lastPrices[pool];
-        uint256 periodReturn = _lastPrice > 0 ? wdiv(price, _lastPrice) : 0;
+        uint256 periodReturn = _lastPrice > 0 ? DSMath.wdiv(price, _lastPrice) : 0;
 
         // logReturn is in 10**18
         // we need to scale it down to 10**8

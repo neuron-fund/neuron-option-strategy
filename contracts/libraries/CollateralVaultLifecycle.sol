@@ -148,7 +148,7 @@ library CollateralVaultLifecycle {
         uint256 managementFeePercent
     )
         internal
-        view
+        pure
         returns (
             uint256 performanceFeeInAsset,
             uint256 managementFeeInAsset,
@@ -168,8 +168,6 @@ library CollateralVaultLifecycle {
         // deposits and withdrawals, is positive. If it is negative, last week's
         // option expired ITM past breakeven, and the vault took a loss so we
         // do not collect performance fee for last week
-        console.log("lastLockedAmount", lastLockedAmount);
-        console.log("lockedBalanceSansPending", lockedBalanceSansPending);
         if (lockedBalanceSansPending > lastLockedAmount) {
             _performanceFeeInAsset = performanceFeePercent > 0
                 ? lockedBalanceSansPending.sub(lastLockedAmount).mul(performanceFeePercent).div(
@@ -213,7 +211,6 @@ library CollateralVaultLifecycle {
         require(bytes(tokenName).length > 0, "!tokenName");
         require(bytes(tokenSymbol).length > 0, "!tokenSymbol");
 
-        require(_vaultParams.asset != address(0), "!asset");
         require(_vaultParams.collateralAsset != address(0), "!collateralAsset");
         require(_vaultParams.underlying != address(0), "!underlying");
         require(_vaultParams.minimumSupply > 0, "!minimumSupply");

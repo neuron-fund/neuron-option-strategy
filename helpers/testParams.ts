@@ -18,8 +18,8 @@ export const NeuronEthThetaVaultPutTestParams: VaultTestParams = {
   deltaFirstOption: BigNumber.from('1000'),
   deltaSecondOption: BigNumber.from('1000'),
   deltaStep: getDeltaStep('WETH'),
-  depositAmount: BigNumber.from(10).pow(18).mul(5000),
-  minimumSupply: BigNumber.from(10).pow(3).toString(),
+  depositAmount: BigNumber.from(10).pow(18).mul(2000),
+  minimumSupply: BigNumber.from(100).pow(3).toString(),
   premiumDiscount: BigNumber.from('997'),
   managementFee: BigNumber.from('2000000'),
   performanceFee: BigNumber.from('20000000'),
@@ -55,4 +55,4 @@ export const NeuronEthThetaVaultCallTestParams: VaultTestParams = {
   collateralVaultCap: parseUnits('50000', 18),
 }
 
-export const testsParams: VaultTestParams[] = [NeuronEthThetaVaultPutTestParams, NeuronEthThetaVaultCallTestParams]
+export const testsParams: VaultTestParams[] = [NeuronEthThetaVaultPutTestParams /* NeuronEthThetaVaultCallTestParams */]

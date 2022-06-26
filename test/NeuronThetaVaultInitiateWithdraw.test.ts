@@ -3,7 +3,7 @@ import { BigNumber } from 'ethers'
 import { assert } from '../helpers/assertions'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
 import { runVaultTests } from '../helpers/runVaultTests'
-import { setOpynOracleExpiryPriceNeuron, setupOracle } from '../helpers/utils'
+import { setOracleExpiryPriceNeuron, setupOracle } from '../helpers/utils'
 import * as time from '../helpers/time'
 
 runVaultTests('#initiateWithdraw', async function (params) {
@@ -68,8 +68,7 @@ runVaultTests('#initiateWithdraw', async function (params) {
 
       await collateralVault.connect(userSigner).initiateWithdraw(depositAmount.div(2))
 
-      // TODO remove opyn everywhere
-      await setOpynOracleExpiryPriceNeuron(
+      await setOracleExpiryPriceNeuron(
         underlying,
         oracle,
         firstOptionStrike,

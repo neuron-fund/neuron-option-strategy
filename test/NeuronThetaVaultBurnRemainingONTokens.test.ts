@@ -3,10 +3,9 @@ import { BigNumber } from 'ethers'
 import * as time from '../helpers/time'
 import { assert } from '../helpers/assertions'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
-import { bidForONToken, setOpynOracleExpiryPriceNeuron, setupOracle } from '../helpers/utils'
+import { bidForONToken, getOracle, setOracleExpiryPriceNeuron, setupOracle } from '../helpers/utils'
 import { runVaultTests } from '../helpers/runVaultTests'
 import { DELAY_INCREMENT } from '../helpers/vault'
-import { wdiv } from '../helpers/math'
 
 runVaultTests('#burnRemainingONTokens', async function (params) {
   const {
@@ -23,13 +22,17 @@ runVaultTests('#burnRemainingONTokens', async function (params) {
     firstOptionPremium,
     auctionDuration,
     defaultONtoken,
-    underlying,
-    underlyingContract: assetContract,
+    firstOptionStrike,
+    isPut,
+    getCurrentOptionExpiry,
+    collateralAssetsOracles,
+    secondOptionStrike,
   } = params
   const depositAmount = params.depositAmount
   const collateralVault = collateralVaults[0]
   const neuronPool = collateralAssetsContracts[0]
   await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, userSigner)
+  const oracle = await setupOracle(params.underlying, ownerSigner)
 
   return () => {
     it('reverts when not called with keeper', async function () {
@@ -98,7 +101,7 @@ runVaultTests('#burnRemainingONTokens', async function (params) {
     //   await gnosisAuction.connect(userSigner).settleAuction(auctionDetails[0])
 
     //   // Asset balance when auction closes only contains auction proceeds
-    //   // Remaining vault's balance is still in Opyn Gamma Controller
+    //   // Remaining vault's balance is still in Option Protocol Gamma Controller
     //   let auctionProceeds = await assetContract.balanceOf(vault.address)
 
     //   assert.isAbove(

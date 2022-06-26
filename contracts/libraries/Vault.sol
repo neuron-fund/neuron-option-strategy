@@ -12,12 +12,6 @@ library Vault {
     // Premium discount has 1-decimal place. For example: 80 * 10**1 = 80%. Which represents a 20% discount.
     uint256 internal constant PREMIUM_DISCOUNT_MULTIPLIER = 10;
 
-    // ONtokens have 8 decimal places.
-    uint256 internal constant ON_TOKEN_DECIMALS = 8;
-
-    // Percentage of funds allocated to options is 2 decimal places. 10 * 10**2 = 10%
-    uint256 internal constant OPTION_ALLOCATION_MULTIPLIER = 10**2;
-
     // Placeholder uint value to prevent cold writes
     uint256 internal constant PLACEHOLDER_UINT = 1;
 
@@ -26,8 +20,6 @@ library Vault {
         bool isPut;
         // Token decimals for vault shares
         uint8 decimals;
-        // Main token Neuron Pool wants
-        address asset;
         // Neuron pool address
         address collateralAsset;
         // Underlying asset of the options sold by vault
@@ -38,11 +30,14 @@ library Vault {
         uint104 cap;
     }
 
+    struct CollateralUpdate {
+        address[] newCollateralVaults;
+        address[] newCollateralAssets;
+    }
+
     struct VaultParams {
         // Option type the vault is selling
         bool isPut;
-        // Token decimals for vault shares
-        uint8 decimals;
         // Asset used in Theta / Delta Vault
         address[] collateralAssets;
         // Underlying asset of the options sold by vault
@@ -78,10 +73,11 @@ library Vault {
         uint104 lastLockedAmount;
         // 32 byte slot 2
         // Stores the total tally of how much of `asset` there is
-        // to be used to mint rTHETA tokens
+        // to be used to mint nTHETA tokens
         uint128 totalPending;
         // Amount locked for scheduled withdrawals;
         uint128 queuedWithdrawShares;
+        bool isDisabled;
     }
 
     struct VaultState {
@@ -89,10 +85,10 @@ library Vault {
         //  Current round number. `round` represents the number of `period`s elapsed.
         uint16 round;
         // Amount that is currently locked for selling options
-        uint104 lockedAmount;
+        uint104 lockedValue;
         // Amount that was locked for selling options in the previous round
         // used for calculating performance fee deduction
-        uint104 lastLockedAmount;
+        uint104 lastLockedValue;
     }
 
     struct DepositReceipt {

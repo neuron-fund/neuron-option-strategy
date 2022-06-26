@@ -5,7 +5,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { BigNumber, Contract, Signer } from 'ethers'
 import { wmul } from '../helpers/math'
 import { getAsset } from './funds'
-import { IOracle__factory } from '../typechain-types'
+import { IGnosisAuction, IOracle__factory } from '../typechain-types'
 import { USDC } from '../constants/externalAddresses'
 import { IWhitelist__factory } from '../typechain-types'
 const { provider } = ethers
@@ -87,7 +87,7 @@ export async function setupOracle(asset: string, signer: SignerWithAddress) {
   return oracle.connect(pricerSigner)
 }
 
-export async function setOpynOracleExpiryPriceNeuron(
+export async function setOracleExpiryPriceNeuron(
   underlyingAsset: string,
   underlyingOracle: Contract,
   underlyingSettlePrice: BigNumber,
@@ -157,7 +157,7 @@ export const convertPriceAmount = async (tokenIn: string, tokenOut: string, amou
 }
 
 export async function bidForONToken(
-  gnosisAuction: Contract,
+  gnosisAuction: IGnosisAuction,
   biddingTokenContract: Contract,
   contractSigner: string,
   onToken: string,
@@ -177,6 +177,10 @@ export async function bidForONToken(
     .div(multiplier)
 
   let bid = wmul(totalOptionsAvailableToBuy.mul(BigNumber.from(10).pow(10)), premium)
+  bid =
+    assetDecimals > 18
+      ? bid.mul(BigNumber.from(10).pow(assetDecimals - 18))
+      : bid.div(BigNumber.from(10).pow(18 - assetDecimals))
   const queueStartElement = '0x0000000000000000000000000000000000000000000000000000000000000001'
 
   await getAsset(biddingTokenContract.address, bid, contractSigner)

@@ -10,7 +10,6 @@ import {
   MARGIN_POOL,
   ON_TOKEN_FACTORY,
   GNOSIS_EASY_AUCTION,
-  DEX_ROUTER,
 } from '../constants/constants'
 import {
   deployProxy,
@@ -18,7 +17,7 @@ import {
   whitelistProduct,
   setAssetPricer,
   convertPriceAmount,
-  setOpynOracleExpiryPriceNeuron,
+  setOracleExpiryPriceNeuron,
 } from '../helpers/utils'
 import { prepareNeuronPool } from '../helpers/neuronPool'
 import { UNIV3_ETH_USDC_POOL, UNIV3_WBTC_USDC_POOL, USDC, WETH } from '../constants/externalAddresses'
@@ -48,6 +47,7 @@ import {
 } from '../typechain-types'
 import { Contract } from '@ethersproject/contracts'
 import * as time from './time'
+import { deployNeuronCollateralVault } from './neuronCollateralVault'
 
 const { provider, getContractAt, getContractFactory } = ethers
 const { parseEther } = ethers.utils
@@ -203,7 +203,7 @@ export async function initiateVault(params: VaultTestParams) {
   const rollToSecondOption = async (settlementPrice: BigNumber) => {
     const oracle = await setupOracle(params.underlying, ownerSigner)
 
-    await setOpynOracleExpiryPriceNeuron(
+    await setOracleExpiryPriceNeuron(
       params.underlying,
       oracle,
       settlementPrice,
@@ -314,63 +314,34 @@ export async function initiateVault(params: VaultTestParams) {
   collateralAssetsAddresses = []
   const collateralUnwrappedAssets: string[] = []
   collateralVaults = []
-  const collateralVaultDeployArgs = [WETH, USDC]
   for (const [i, neuronPoolName] of params.neuronPoolsNames.entries()) {
-    const neuronPoolDeployment = await deployments.get(neuronPoolName)
-    const neuronPool = INeuronPool__factory.connect(neuronPoolDeployment.address, ownerSigner)
-    await prepareNeuronPool(neuronPool)
-    const neuronPoolAddress = neuronPool.address
-
-    const neuronPoolPricerName = params.neuronPoolsPricersNames[i]
-
-    const neuronPoolPricerDeployment = await deployments.get(neuronPoolPricerName)
-
-    const neuronPoolPricer = INeuronPoolPricer__factory.connect(neuronPoolPricerDeployment.address, ownerSigner)
-
+    const { collateralUnwrappedAsset, collateralVault, neuronPoolPricer, neuronPool } =
+      await deployNeuronCollateralVault({
+        neuronPoolName,
+        ownerSigner,
+        owner,
+        keeper,
+        keeperSigner,
+        feeRecipient,
+        managementFee,
+        performanceFee,
+        tokenName,
+        tokenSymbol,
+        isPut,
+        tokenDecimals,
+        underlying,
+        minimumSupply,
+        neuronPoolPricerName: params.neuronPoolsPricersNames[i],
+        adminSigner,
+        collateralVaultCap: params.collateralVaultCap,
+        collateralVaultLifecycleLib,
+        neuronPoolUtilsLib,
+      })
     collateralAssetsContracts.push(neuronPool)
     collateralAssetsAddresses.push(neuronPool.address)
     collateralAssetsOracles.push(neuronPoolPricer)
     collateralAssetsOraclesAddresses.push(neuronPoolPricer.address)
-    await setAssetPricer(neuronPoolAddress, neuronPoolPricer.address)
-
-    const collateralUnwrappedAsset = await neuronPool.token()
     collateralUnwrappedAssets.push(collateralUnwrappedAsset)
-    const neuronPoolSupportedTokens = await neuronPool.getSupportedTokens()
-    const neuronPoolBaseTokens = neuronPoolSupportedTokens.filter(x => x !== collateralUnwrappedAsset)
-
-    const collateralVaultInitializeArgs = [
-      owner,
-      keeper,
-      feeRecipient,
-      managementFee,
-      performanceFee,
-      `COLLATERAL-${tokenName}`,
-      `CV${tokenSymbol}`,
-      [
-        isPut,
-        tokenDecimals,
-        collateralUnwrappedAsset,
-        neuronPoolAddress,
-        underlying,
-        minimumSupply,
-        params.collateralVaultCap,
-      ],
-      neuronPoolBaseTokens,
-    ]
-    const collateralVault = (
-      await deployProxy(
-        'NeuronCollateralVault',
-        adminSigner,
-        collateralVaultInitializeArgs,
-        collateralVaultDeployArgs,
-        {
-          libraries: {
-            CollateralVaultLifecycle: collateralVaultLifecycleLib.address,
-            NeuronPoolUtils: neuronPoolUtilsLib.address,
-          },
-        }
-      )
-    ).connect(keeperSigner) as NeuronCollateralVault
     collateralVaults.push(collateralVault)
   }
 
@@ -386,10 +357,10 @@ export async function initiateVault(params: VaultTestParams) {
     strikeSelection.address,
     premiumDiscount,
     [auctionDuration, auctionBiddingToken],
-    [isPut, tokenDecimals, collateralAssetsAddresses, underlying, collateralVaultsAddresses],
+    [isPut, collateralAssetsAddresses, underlying, collateralVaultsAddresses],
   ]
 
-  const vaultDeployArgs = [WETH, USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION, DEX_ROUTER]
+  const vaultDeployArgs = [WETH, USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION]
 
   vault = (
     await deployProxy('NeuronThetaVault', adminSigner, vaultInitializeArgs, vaultDeployArgs, {
@@ -409,7 +380,6 @@ export async function initiateVault(params: VaultTestParams) {
 
   const onTokenFactoryDeployment = await deployments.get('ONtokenFactory')
   onTokenFactory = IONtokenFactory__factory.connect(onTokenFactoryDeployment.address, ownerSigner)
-
   await whitelistProduct(params.underlying, params.strikeAsset, collateralAssetsAddresses, params.isPut)
 
   const latestTimestamp = (await provider.getBlock('latest')).timestamp

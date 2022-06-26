@@ -18,12 +18,14 @@ import {
   WETH,
   STE_CRV,
   CURVE_ALETH_LP_TOKEN,
+  LUSD,
 } from '../constants/externalAddresses'
+import { parseEther } from '@ethersproject/units'
 
 export const whales = {
-  [WBTC]: '0xC564EE9f21Ed8A2d8E7e76c085740d5e4c5FaFbE',
-  [WETH]: '0xC564EE9f21Ed8A2d8E7e76c085740d5e4c5FaFbE',
-  [USDC]: '0xC564EE9f21Ed8A2d8E7e76c085740d5e4c5FaFbE',
+  [WBTC]: '0xe3dd3914ab28bb552d41b8dfe607355de4c37a51',
+  [WETH]: '0x1C11BA15939E1C16eC7ca1678dF6160Ea2063Bc5',
+  [USDC]: '0x0D2703ac846c26d5B6Bbddf1FD6027204F409785',
   [DAI]: '0x5a16552f59ea34e44ec81e58b3817833e9fd5436',
   [USDT]: '0x5754284f345afc66a98fbb0a0afe71e0f007b949',
   [CRV_CVX_ETH]: '0x38ee5f5a39c01cb43473992c12936ba1219711ab',
@@ -38,6 +40,7 @@ export const whales = {
   [CURVE_3CRV_LP_TOKEN]: '0xdD050C0950Cb996230519f928680ea3D7537eCA7',
   [STE_CRV]: '0x43378368D84D4bA00D1C8E97EC2E6016A82fC062',
   [CURVE_ALETH_LP_TOKEN]: '0x084d0cd0605f47D92Dc2DFD22238e9c5605023E9',
+  [LUSD]: '0x3ddfa8ec3052539b6c9549f12cea2c295cff5296',
 } as const
 
 export type AseetsWithWhales = keyof typeof whales
@@ -47,6 +50,11 @@ export const getAsset = async (asset: string, amount: BigNumber, recipient: stri
   if (!whaleAddress) {
     throw new Error(`whale for ${asset} is not defined`)
   }
+  const localSigner = (await ethers.getSigners())[0]
+  await localSigner.sendTransaction({
+    to: whaleAddress,
+    value: parseEther('0.5'),
+  })
   await network.provider.request({
     method: 'hardhat_impersonateAccount',
     params: [whaleAddress],

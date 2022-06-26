@@ -10,6 +10,7 @@ abstract contract NeuronThetaVaultStorageV1 {
     Vault.VaultState public vaultState;
     /// @notice Vault's state of the options sold and the timelocked option
     Vault.OptionState public optionState;
+    Vault.CollateralUpdate internal collateralUpdate;
     /// @notice Fee recipient for the performance and management fees
     address public feeRecipient;
     /// @notice role in charge of weekly vault operations such as rollToNextOption and burnRemainingONTokens
@@ -39,6 +40,8 @@ abstract contract NeuronThetaVaultStorageV1 {
     uint256 public optionAuctionID;
     // Auction bid token address
     address public auctionBiddingToken;
+    // Auction bid token address
+    uint8 public auctionBiddingTokenDecimals;
 }
 
 // We are following Compound's method of upgrading new contract implementations

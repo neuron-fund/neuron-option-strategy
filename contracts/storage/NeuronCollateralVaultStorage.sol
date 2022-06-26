@@ -7,7 +7,7 @@ import {INeuronPool} from "../interfaces/INeuronPool.sol";
 abstract contract NeuronCollateralVaultStorageV1 {
     /// @notice Stores the user's pending deposit for the round
     mapping(address => Vault.DepositReceipt) public depositReceipts;
-    /// @notice On every round's close, the pricePerShare value of an rTHETA token is stored
+    /// @notice On every round's close, the pricePerShare value of an nTHETA token is stored
     /// This is used to determine the number of shares to be returned
     /// to a user with their DepositReceipt.depositAmount
     mapping(uint256 => uint256) public roundPricePerShare;

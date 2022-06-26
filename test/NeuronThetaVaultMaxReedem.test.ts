@@ -4,7 +4,7 @@ import * as time from '../helpers/time'
 import { assert } from '../helpers/assertions'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
 import { CHAINID } from '../constants/constants'
-import { setOpynOracleExpiryPriceNeuron, setupOracle } from '../helpers/utils'
+import { setOracleExpiryPriceNeuron, setupOracle } from '../helpers/utils'
 import { runVaultTests } from '../helpers/runVaultTests'
 
 runVaultTests('#maxRedeem', async function (params) {
@@ -131,17 +131,11 @@ runVaultTests('#maxRedeem', async function (params) {
 
       const beforePps = await collateralVault.pricePerShare()
 
-      const AMOUNT = {
-        : '100000000000',
-        [CHAINID.AVAX_MAINNET]: '1000000000',
-        [CHAINID.AURORA_MAINNET]: '1000000000',
-      }
+      const AMOUNT = '100000000000'
 
-      const settlementPriceITM = isPut
-        ? firstOptionStrike.sub(AMOUNT)
-        : firstOptionStrike.add(AMOUNT)
+      const settlementPriceITM = isPut ? firstOptionStrike.sub(AMOUNT) : firstOptionStrike.add(AMOUNT)
 
-      await setOpynOracleExpiryPriceNeuron(
+      await setOracleExpiryPriceNeuron(
         params.underlying,
         oracle,
         settlementPriceITM,

@@ -20,7 +20,6 @@ import {NeuronCollateralVaultStorage} from "../storage/NeuronCollateralVaultStor
 import "hardhat/console.sol";
 
 contract NeuronCollateralVault is
-    INeuronCollateralVault,
     ReentrancyGuardUpgradeable,
     OwnableUpgradeable,
     ERC20Upgradeable,
@@ -29,6 +28,36 @@ contract NeuronCollateralVault is
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using ShareMath for Vault.DepositReceipt;
+
+    /************************************************
+     *  EVENTS
+     ***********************************************/
+
+    event Deposit(address indexed account, uint256 amount, uint256 round);
+
+    event InitiateWithdraw(address indexed account, uint256 shares, uint256 round);
+
+    event InstantWithdraw(address indexed account, uint256 amount, uint256 round);
+
+    event Redeem(address indexed account, uint256 share, uint256 round);
+
+    event ManagementFeeSet(uint256 managementFee, uint256 newManagementFee);
+
+    event PerformanceFeeSet(uint256 performanceFee, uint256 newPerformanceFee);
+
+    event CapSet(uint256 oldCap, uint256 newCap);
+
+    event Withdraw(address indexed account, uint256 amount, uint256 shares);
+
+    event CollectVaultFees(uint256 performanceFee, uint256 vaultFee, uint256 round, address indexed feeRecipient);
+
+    event OpenShort(uint256 depositAmount, address indexed manager);
+
+    event PremiumSwap(uint256 recievedAmount, uint256 swapResultAmount, uint256 round);
+
+    event NewKeeperSet(address indexed keeper, address indexed newKeeper);
+
+    event RoundInit(uint256 indexed round);
 
     /************************************************
      *  IMMUTABLES & CONSTANTS
@@ -102,9 +131,9 @@ contract NeuronCollateralVault is
 
         collateralToken = INeuronPool(_vaultParams.collateralAsset);
 
-        uint256 assetBalance = totalBalance();
-        ShareMath.assertUint104(assetBalance);
-        vaultState.lastLockedAmount = uint104(assetBalance);
+        uint256 collateralAssetBalance = totalBalance();
+        ShareMath.assertUint104(collateralAssetBalance);
+        vaultState.lastLockedAmount = uint104(collateralAssetBalance);
 
         for (uint256 i = 0; i < _baseDepositTokens.length; i++) {
             allowedDepositTokens[_baseDepositTokens[i]] = true;
@@ -191,6 +220,7 @@ contract NeuronCollateralVault is
      * @param _amount is the amount of `asset` to deposit
      */
     function deposit(uint256 _amount, address _depositToken) external payable nonReentrant {
+        require(!vaultState.isDisabled, "vault is disabled");
         require(_amount > 0, "!amount");
         require(allowedDepositTokens[_depositToken], "!_depositToken");
 
@@ -214,6 +244,7 @@ contract NeuronCollateralVault is
         address _creditor,
         address _depositToken
     ) external payable nonReentrant {
+        require(!vaultState.isDisabled, "vault is disabled");
         require(_amount > 0, "!amount");
         require(_creditor != address(0), "!creditor");
         require(allowedDepositTokens[_depositToken], "!_depositToken");
@@ -236,10 +267,7 @@ contract NeuronCollateralVault is
             IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), _amount);
         }
 
-        // TODO remove deposit with asset
-        if (_depositToken == vaultParams.asset) {
-            _depositFor(_amount, _creditor);
-        } else if (_depositToken == vaultParams.collateralAsset) {
+        if (_depositToken == vaultParams.collateralAsset) {
             _depositYieldToken(_amount, _creditor);
         } else {
             if (_depositToken != NEURON_POOL_ETH) {
@@ -317,11 +345,6 @@ contract NeuronCollateralVault is
 
         // We do a max redeem before initiating a withdrawal
         // But we check if they must first have unredeemed shares
-        console.log("initiateWithdraw ~ depositReceipts[msg.sender].amount", depositReceipts[msg.sender].amount);
-        console.log(
-            "initiateWithdraw ~ depositReceipts[msg.sender].unredeemedShares",
-            depositReceipts[msg.sender].unredeemedShares
-        );
         if (depositReceipts[msg.sender].amount > 0 || depositReceipts[msg.sender].unredeemedShares > 0) {
             _redeem(0, true);
         }
@@ -438,7 +461,7 @@ contract NeuronCollateralVault is
         if (_withdrawToken == address(collateralToken)) {
             NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, amount);
         } else {
-            NeuronPoolUtils.unwrapYieldToken(amount, _withdrawToken, address(collateralToken));
+            NeuronPoolUtils.unwrapNeuronPool(amount, _withdrawToken, address(collateralToken));
             NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, amount);
         }
     }
@@ -484,7 +507,7 @@ contract NeuronCollateralVault is
         if (_withdrawToken == address(collateralToken)) {
             NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, withdrawAmount);
         } else {
-            NeuronPoolUtils.unwrapYieldToken(withdrawAmount, _withdrawToken, address(collateralToken));
+            NeuronPoolUtils.unwrapNeuronPool(withdrawAmount, _withdrawToken, address(collateralToken));
             NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, withdrawAmount);
         }
 
@@ -512,36 +535,22 @@ contract NeuronCollateralVault is
     /**
      * @notice Rolls the vault's funds into a new short position.
      */
-    function rollToNextOption() external onlyKeeper nonReentrant returns (uint256, uint256) {
-        console.log("rollToNextOption ~ before _rollToNextOption", collateralToken.balanceOf(address(this)));
+    function rollToNextOption() external onlyKeeper nonReentrant returns (uint256 lockedBalanceInCollateralToken) {
+        require(!vaultState.isDisabled, "vault is disabled");
         uint256 queuedWithdrawAmount = _rollToNextOption(uint256(lastQueuedWithdrawAmount));
-        console.log("rollToNextOption ~ after _rollToNextOption", collateralToken.balanceOf(address(this)));
 
         lastQueuedWithdrawAmount = queuedWithdrawAmount;
 
         // Locked balance denominated in `collateralToken`
+        // We are subtracting `collateralAsset` balance by queuedWithdrawAmount
 
-        // We are subtracting `collateralAsset` balance by queuedWithdrawAmount denominated in `collateralAsset`
-
-        uint256 collateralPricePerShare = collateralToken.pricePerShare();
-
-        uint256 lockedBalanceInCollateralToken = collateralToken.balanceOf(address(this)).sub(
-            DSMath.wdiv(
-                queuedWithdrawAmount,
-                collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
-            )
-        );
-
-        uint256 lockedBalanceInAsset = DSMath.wmul(
-            lockedBalanceInCollateralToken,
-            collateralPricePerShare.mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
-        );
+        lockedBalanceInCollateralToken = collateralToken.balanceOf(address(this)).sub(queuedWithdrawAmount);
 
         collateralToken.transfer(msg.sender, lockedBalanceInCollateralToken);
 
         emit OpenShort(lockedBalanceInCollateralToken, msg.sender);
 
-        return (lockedBalanceInCollateralToken, lockedBalanceInAsset);
+        return (lockedBalanceInCollateralToken);
     }
 
     /*
@@ -585,20 +594,26 @@ contract NeuronCollateralVault is
         vaultState.lockedAmount = uint104(lockedBalance);
 
         _mint(address(this), mintShares);
-        // Wrap entire `asset` balance to `collateralToken` balance
-        NeuronPoolUtils.wrapToYieldToken(vaultParams.asset, vaultParams.collateralAsset);
 
         if (totalVaultFee > 0) {
-            NeuronPoolUtils.withdrawYieldAndBaseToken(
-                WETH,
-                vaultParams.asset,
-                vaultParams.collateralAsset,
-                recipient,
-                totalVaultFee
-            );
+            NeuronPoolUtils.unwrapAndWithdraw(WETH, vaultParams.collateralAsset, totalVaultFee, recipient);
         }
 
         return (queuedWithdrawAmount);
+    }
+
+    function disableVault() external onlyOwner {
+        require(vaultState.lockedAmount == 0, "lockedAmount != 0");
+        vaultState.isDisabled = true;
+        // Do not take management fee when disabled
+        managementFee = 0;
+
+        uint256 queuedWithdrawAmount = _rollToNextOption(uint256(lastQueuedWithdrawAmount));
+        lastQueuedWithdrawAmount = queuedWithdrawAmount;
+    }
+
+    function isDisabled() external view returns (bool) {
+        return vaultState.isDisabled;
     }
 
     /**
@@ -607,13 +622,11 @@ contract NeuronCollateralVault is
      */
     function commitAndClose(address premiumToken) external onlyKeeper nonReentrant {
         // Wrap premium to neuron pool tokens
-        if (premiumToken != vaultParams.asset) {
-            uint256 premiumBalance = IERC20(premiumToken).balanceOf(address(this));
-            if (premiumBalance != 0) {
-                IERC20(premiumToken).safeApprove(address(collateralToken), premiumBalance);
-                uint256 depositReturn = collateralToken.deposit(premiumToken, premiumBalance);
-                emit PremiumSwap(premiumBalance, depositReturn, vaultState.round);
-            }
+        uint256 premiumBalance = IERC20(premiumToken).balanceOf(address(this));
+        if (premiumBalance != 0) {
+            IERC20(premiumToken).safeApprove(address(collateralToken), premiumBalance);
+            uint256 depositReturn = collateralToken.deposit(premiumToken, premiumBalance);
+            emit PremiumSwap(premiumBalance, depositReturn, vaultState.round);
         }
 
         uint256 lockedAmount = vaultState.lockedAmount;
@@ -689,13 +702,7 @@ contract NeuronCollateralVault is
      * @return total balance of the vault, including the amounts locked in third party protocols
      */
     function totalBalance() public view returns (uint256) {
-        return
-            uint256(vaultState.lockedAmount).add(IERC20(vaultParams.asset).balanceOf(address(this))).add(
-                DSMath.wmul(
-                    collateralToken.balanceOf(address(this)),
-                    collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
-                )
-            );
+        return uint256(vaultState.lockedAmount).add(collateralToken.balanceOf(address(this)));
     }
 
     /**

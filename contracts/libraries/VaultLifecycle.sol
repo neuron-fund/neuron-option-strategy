@@ -19,6 +19,8 @@ library VaultLifecycle {
     using SafeMath for uint256;
     using SupportsNonCompliantERC20 for IERC20;
 
+    event BurnedOnTokens(address indexed ontokenAddress, uint256 amountBurned);
+
     struct CloseParams {
         address ON_TOKEN_FACTORY;
         address USDC;
@@ -114,7 +116,7 @@ library VaultLifecycle {
     }
 
     /**
-     * @notice Verify the onToken has the correct parameters to prevent vulnerability to opyn contract changes
+     * @notice Verify the onToken has the correct parameters to prevent vulnerability to option protocolcontract changes
      * @param onTokenAddress is the address of the onToken
      * @param vaultParams is the struct with vault general data
      * @param collateralAssets is the address of the collateral asset
@@ -163,9 +165,9 @@ library VaultLifecycle {
     }
 
     /**
-     * @notice Creates the actual Opyn short position by depositing collateral and minting onTokens
-     * @param gammaController is the address of the opyn controller contract
-     * @param marginPool is the address of the opyn margin contract which holds the collateral
+     * @notice Creates the actual Option Protocol short position by depositing collateral and minting onTokens
+     * @param gammaController is the address of the option protocolcontroller contract
+     * @param marginPool is the address of the option protocolmargin contract which holds the collateral
      * @param onTokenAddress is the address of the onToken to mint
      * @param depositAmounts is the amounts of collaterals to deposit
      * @return the onToken mint amount
@@ -175,12 +177,12 @@ library VaultLifecycle {
         address marginPool,
         address onTokenAddress,
         uint256[] memory depositAmounts
-    ) external returns (uint256) {
+    ) external returns (uint256, uint256) {
         IController controller = IController(gammaController);
         uint256 newVaultID = (controller.accountVaultCounter(address(this))).add(1);
 
         // An onToken's collateralAsset is the vault's `asset`
-        // So in the context of performing Opyn short operations we call them collateralAsset
+        // So in the context of performing Option Protocol short operations we call them collateralAsset
         IONtoken onToken = IONtoken(onTokenAddress);
         address[] memory collateralAssets = onToken.getCollateralAssets();
 
@@ -228,7 +230,7 @@ library VaultLifecycle {
 
         uint256 mintedAmount = onToken.balanceOf(address(this));
 
-        return mintedAmount;
+        return (mintedAmount, newVaultID);
     }
 
     /**
@@ -236,7 +238,7 @@ library VaultLifecycle {
      * It closes the most recent vault opened by the contract. This assumes that the contract will
      * only have a single vault open at any given time. Since calling `_closeShort` deletes vaults by
      calling SettleVault action, this assumption should hold.
-     * @param gammaController is the address of the opyn controller contract
+     * @param gammaController is the address of the option protocolcontroller contract
      * @return amount of collateral redeemed from the vault
      */
     function settleShort(Vault.VaultParams storage vaultParams, address gammaController)
@@ -280,15 +282,10 @@ library VaultLifecycle {
      * @notice Burn the remaining onTokens left over from auction. Currently this implementation is simple.
      * It burns onTokens from the most recent vault opened by the contract. This assumes that the contract will
      * only have a single vault open at any given time.
-     * @param gammaController is the address of the opyn controller contract
+     * @param gammaController is the address of the option protocolcontroller contract
      * @param currentOption is the address of the current option
-     * @return amount of collateral redeemed by burning onTokens
      */
-    function burnONtokens(
-        Vault.VaultParams storage vaultParams,
-        address gammaController,
-        address currentOption
-    ) external returns (uint256[] memory) {
+    function burnONtokens(address gammaController, address currentOption) external {
         uint256 numONTokensToBurn = IERC20(currentOption).balanceOf(address(this));
         require(numONTokensToBurn > 0, "No onTokens to burn");
 
@@ -301,7 +298,6 @@ library VaultLifecycle {
 
         require(gammaVault.shortONtoken != address(0), "No short");
 
-        uint256[] memory startCollateralBalances = getCollateralBalances(vaultParams);
         // Burning `amount` of onTokens from the neuron vault,
         // then withdrawing the corresponding collateral amount from the vault
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](2);
@@ -334,9 +330,7 @@ library VaultLifecycle {
 
         controller.operate(actions);
 
-        uint256[] memory endCollateralBalances = getCollateralBalances(vaultParams);
-
-        return getArrayOfDiffs(endCollateralBalances, startCollateralBalances);
+        emit BurnedOnTokens(currentOption, numONTokensToBurn);
     }
 
     function getCollateralBalances(Vault.VaultParams storage vaultParams) internal view returns (uint256[] memory) {
@@ -349,7 +343,7 @@ library VaultLifecycle {
         return collateralBalances;
     }
 
-    function getArrayOfDiffs(uint256[] memory a, uint256[] memory b) internal view returns (uint256[] memory) {
+    function getArrayOfDiffs(uint256[] memory a, uint256[] memory b) internal pure returns (uint256[] memory) {
         require(a.length == b.length, "Arrays must be of equal length");
         uint256[] memory diffs = new uint256[](a.length);
         for (uint256 i = 0; i < a.length; i++) {

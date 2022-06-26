@@ -3,7 +3,7 @@ import { OPTION_DELAY } from '../helpers/vault'
 import { BigNumber } from '@ethersproject/bignumber'
 import { assert } from '../helpers/assertions'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
-import { CHAINID, GAMMA_CONTROLLER } from '../constants/constants'
+import { GAMMA_CONTROLLER } from '../constants/constants'
 import { ethers } from 'hardhat'
 import { constants } from 'ethers'
 import { WETH } from '../constants/externalAddresses'
@@ -11,8 +11,6 @@ import { convertPriceAmount } from '../helpers/utils'
 import { getAsset } from '../helpers/funds'
 import { wmul } from '../helpers/math'
 import { runVaultTests } from '../helpers/runVaultTests'
-import { IONtoken__factory } from '../typechain-types'
-
 const { getContractAt } = ethers
 
 runVaultTests('#commitAndClose', async function (params) {
@@ -34,9 +32,6 @@ runVaultTests('#commitAndClose', async function (params) {
     keeperSigner,
     firstOption,
     optionsPremiumPricer,
-    collateralAssetsAddresses,
-    firstOptionStrike,
-    firstOptionExpiry,
   } = params
   const provider = ethers.provider
 
@@ -58,7 +53,7 @@ runVaultTests('#commitAndClose', async function (params) {
       assert.equal(optionState.currentOption, constants.AddressZero)
       assert.equal(optionState.nextOption, defaultONtokenAddress)
       assert.equal(optionState.nextOptionReadyAt, block.timestamp + OPTION_DELAY)
-      assert.isTrue(vaultState.lockedAmount.isZero())
+      assert.isTrue(vaultState.lockedValue.isZero())
       assert.equal(optionState.currentOption, constants.AddressZero)
     })
 
@@ -74,9 +69,7 @@ runVaultTests('#commitAndClose', async function (params) {
     })
 
     it('sets the correct strike when overriding strike price', async function () {
-      const WETH_STRIKE_PRICE = {
-        : 250000000000, // WETH
-      }
+      const WETH_STRIKE_PRICE = 250000000000 // WETH
 
       const altStrikePrice = '405000000000'
       const newStrikePrice = params.underlying === WETH ? WETH_STRIKE_PRICE : altStrikePrice

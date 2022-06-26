@@ -79,6 +79,8 @@ contract OptionsPremiumPricer is DSMath {
 
         (uint256 call, uint256 put) = quoteAll(t, v, sp, st);
 
+        console.log(")externalviewreturns ~ isPut", isPut);
+        console.log(")externalviewreturns ~ stablesOracleDecimals", stablesOracleDecimals);
         // Multiplier to convert oracle latestAnswer to 18 decimals
         uint256 assetOracleMultiplier = 10**(uint256(18).sub(isPut ? stablesOracleDecimals : priceOracleDecimals));
         // Make option premium denominated in the underlying

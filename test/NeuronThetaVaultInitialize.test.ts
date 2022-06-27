@@ -7,7 +7,7 @@ import { assert } from '../helpers/assertions'
 import { USDC, WETH } from '../constants/externalAddresses'
 import { FEE_SCALING, OPTION_DELAY, WEEKS_PER_YEAR } from '../helpers/vault'
 import { runVaultTests } from '../helpers/runVaultTests'
-import { AdminUpgradeabilityProxy__factory } from '../typechain-types'
+import {  TransparentUpgradeableProxy__factory } from '../typechain-types'
 
 const chainId = CHAINID.ETH_MAINNET
 
@@ -50,12 +50,12 @@ runVaultTests('#initialize', async function (params) {
   const vaultDeployArgs = [WETH, USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION] as const
   const testVaultLogic = await NeuronThetaVault.deploy(...vaultDeployArgs)
   const initializeTestVault = async initializeArgs => {
-    const AdminUpgradeabilityProxy = (await ethers.getContractFactory(
+    const TransparentUpgradeableProxy = (await ethers.getContractFactory(
       'TransparentUpgradeableProxy',
       adminSigner
-    )) as AdminUpgradeabilityProxy__factory
+    )) as TransparentUpgradeableProxy__factory
     const initBytes = testVaultLogic.interface.encodeFunctionData('initialize', initializeArgs)
-    return AdminUpgradeabilityProxy.deploy(testVaultLogic.address, await adminSigner.getAddress(), initBytes)
+    return TransparentUpgradeableProxy.deploy(testVaultLogic.address, await adminSigner.getAddress(), initBytes)
   }
 
   return () => {

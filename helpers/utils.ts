@@ -25,13 +25,13 @@ export async function deployProxy(
   logicDeployParams = [],
   factoryOptions = {}
 ) {
-  const AdminUpgradeabilityProxy = await ethers.getContractFactory('TransparentUpgradeableProxy', adminSigner)
+  const TransparentUpgradeableProxy = await ethers.getContractFactory('TransparentUpgradeableProxy', adminSigner)
   const LogicContract = await ethers.getContractFactory(logicContractName, factoryOptions || {})
   const logic = await LogicContract.deploy(...logicDeployParams)
 
   const initBytes = LogicContract.interface.encodeFunctionData('initialize', initializeArgs)
 
-  const proxy = await AdminUpgradeabilityProxy.deploy(logic.address, await adminSigner.getAddress(), initBytes)
+  const proxy = await TransparentUpgradeableProxy.deploy(logic.address, await adminSigner.getAddress(), initBytes)
   return await ethers.getContractAt(logicContractName, proxy.address)
 }
 

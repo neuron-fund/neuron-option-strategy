@@ -8,8 +8,6 @@ import {IERC20DetailedLegacy} from "./interfaces/IERC20DetailedLegacy.sol";
 import {Math} from "./libraries/Math.sol";
 import {SafeMathLegacy} from "./libraries/SafeMathLegacy.sol";
 
-import "hardhat/console.sol";
-
 contract OptionsPremiumPricer {
     using SafeMathLegacy for uint256;
 
@@ -74,15 +72,11 @@ contract OptionsPremiumPricer {
         require(expiryTimestamp > block.timestamp, "Expiry must be in the future!");
 
         uint256 spotPrice = priceOracle.latestAnswer();
-        console.log(")externalviewreturns ~ spotPrice", spotPrice);
-        console.log("st", st);
 
         (uint256 sp, uint256 v, uint256 t) = blackScholesParams(spotPrice, expiryTimestamp);
 
         (uint256 call, uint256 put) = quoteAll(t, v, sp, st);
 
-        console.log(")externalviewreturns ~ isPut", isPut);
-        console.log(")externalviewreturns ~ stablesOracleDecimals", stablesOracleDecimals);
         // Multiplier to convert oracle latestAnswer to 18 decimals
         uint256 assetOracleMultiplier = 10**(uint256(18).sub(isPut ? stablesOracleDecimals : priceOracleDecimals));
         // Make option premium denominated in the USDC
@@ -109,9 +103,6 @@ contract OptionsPremiumPricer {
 
         uint256 spotPrice = priceOracle.latestAnswer();
         (uint256 sp, uint256 v, uint256 t) = blackScholesParams(spotPrice, expiryTimestamp);
-        console.log("getOptionDelta ~ expiryTimestamp", expiryTimestamp);
-        console.log("getOptionDelta ~ block.timestamp", block.timestamp);
-        console.log("getOptionDelta ~ t", t);
 
         uint256 d1;
         uint256 d2;
@@ -149,9 +140,6 @@ contract OptionsPremiumPricer {
 
         // days until expiry
         uint256 t = expiryTimestamp.sub(block.timestamp).div(1 days);
-        console.log(")externalviewreturns ~ block.timestamp", block.timestamp);
-        console.log(")externalviewreturns ~ expiryTimestamp", expiryTimestamp);
-        console.log(")externalviewreturns ~ t", t);
 
         uint256 d1;
         uint256 d2;
@@ -244,8 +232,6 @@ contract OptionsPremiumPricer {
         uint256 sig = (((1e18 * sigma) / sigmaB) * t) / 365;
 
         uint256 sSQRT = (v * Math.sqrt2((1e18 * t) / 365)) / 1e9;
-        console.log(")internalpurereturns ~ t", t);
-        console.log(")internalpurereturns ~ v", v);
         require(sSQRT > 0, "!sSQRT");
 
         d1 = (1e18 * Math.ln((Math.FIXED_1 * sp) / st)) / Math.FIXED_1;

@@ -11,8 +11,6 @@ import {IOptionsPremiumPricer} from "../interfaces/INeuron.sol";
 import {Vault} from "./Vault.sol";
 import {INeuronThetaVault} from "../interfaces/INeuronThetaVault.sol";
 
-import "hardhat/console.sol";
-
 library GnosisAuction {
     using SafeMath for uint256;
     using SafeERC20 for IERC20Detailed;
@@ -65,15 +63,11 @@ library GnosisAuction {
         // shift decimals to correspond to decimals of USDC for puts
         // and underlying for calls
         uint256 minBidAmount = DSMath.wmul(onTokenSellAmount.mul(10**10), auctionDetails.onTokenPremium);
-        console.log("startAuction ~ onTokenSellAmount.mul(10**10)", onTokenSellAmount.mul(10**10));
-        console.log("startAuction ~ auctionDetails.onTokenPremium", auctionDetails.onTokenPremium);
-        console.log("startAuction ~ minBidAmount", minBidAmount);
 
         minBidAmount = auctionDetails.assetDecimals > 18
             ? minBidAmount.mul(10**(auctionDetails.assetDecimals.sub(18)))
             : minBidAmount.div(10**(uint256(18).sub(auctionDetails.assetDecimals)));
 
-        console.log("startAuction ~ minBidAmount", minBidAmount);
         require(minBidAmount <= type(uint96).max, "optionPremium * onTokenSellAmount > type(uint96) max value!");
 
         uint256 auctionEnd = block.timestamp.add(auctionDetails.duration);
@@ -136,19 +130,13 @@ library GnosisAuction {
         address _assetB,
         address oracleAddress
     ) internal view returns (uint256) {
-        console.log("oracleAddress", oracleAddress);
-        console.log("_assetB", _assetB);
-        console.log("_assetA", _assetA);
-        console.log("_amount", _amount);
         if (_assetA == _assetB) {
             return _amount;
         }
         IOracle oracle = IOracle(oracleAddress);
 
         uint256 priceA = oracle.getPrice(_assetA);
-        console.log(")internalviewreturns ~ priceA", priceA);
         uint256 priceB = oracle.getPrice(_assetB);
-        console.log(")internalviewreturns ~ priceB", priceB);
         uint256 assetADecimals = IERC20Detailed(_assetA).decimals();
         uint256 assetBDecimals = IERC20Detailed(_assetB).decimals();
 
@@ -212,7 +200,6 @@ library GnosisAuction {
         // Apply a discount to incentivize arbitraguers
         optionPremium = optionPremium.mul(premiumDiscount).div(100 * Vault.PREMIUM_DISCOUNT_MULTIPLIER);
 
-        console.log("BEFORE CONVERT");
         optionPremium = convertAmountOnLivePrice(optionPremium, convertFromToken, convertTonToken, oracleAddress);
 
         require(optionPremium <= type(uint96).max, "optionPremium > type(uint96) max value!");

@@ -7,8 +7,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IUniswapRouterV2} from "../interfaces/IUniswapRouterV2.sol";
 import "./Path.sol";
 
-import "hardhat/console.sol";
-
 library UniswapRouter {
     using Path for bytes;
     using SafeMath for uint256;
@@ -51,18 +49,10 @@ library UniswapRouter {
             path[0] = tokenIn;
             path[1] = weth;
             path[2] = tokenOut;
-            console.log(")internalreturns ~ path[2]", path[2]);
         }
-        console.log(")internalreturns ~ path[0]", path[0]);
-        console.log(")internalreturns ~ path[1]", path[1]);
 
         uint256 amountBefore = IERC20(tokenOut).balanceOf(recipient);
 
-        console.log(")internalreturns ~ minAmountOut", minAmountOut);
-        console.log(")internalreturns ~ amountIn", amountIn);
-        console.log("IERC20(tokenIn).allowence", IERC20(tokenIn).allowance(address(this), router));
-        console.log(")internalreturns ~ recipient", recipient);
-        console.log(")internalreturns ~ address(this)", address(this));
         IUniswapRouterV2(router).swapExactTokensForTokens(
             amountIn,
             minAmountOut,
@@ -70,9 +60,7 @@ library UniswapRouter {
             recipient,
             block.timestamp.add(60)
         );
-        console.log("swapExactTokensForTokens after");
         uint256 amountAfter = IERC20(tokenOut).balanceOf(recipient);
-        console.log(")internalreturns ~ amountAfter", amountAfter);
 
         return amountAfter.sub(amountBefore);
     }

@@ -11,8 +11,6 @@ import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
 import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
 import {UniswapRouter} from "./UniswapRouter.sol";
 
-import "hardhat/console.sol";
-
 library CollateralVaultLifecycle {
     using SafeMath for uint256;
     using SupportsNonCompliantERC20 for IERC20;

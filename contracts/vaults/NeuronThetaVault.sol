@@ -14,7 +14,6 @@ import {INeuronCollateralVault} from "../interfaces/INeuronCollateralVault.sol";
 import {INeuronPool} from "../interfaces/INeuronPool.sol";
 import {IController, MarginVault} from "../interfaces/GammaInterface.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
-import "hardhat/console.sol";
 
 /**
  * UPGRADEABILITY: Since we use the upgradeable proxy pattern, we must observe
@@ -271,35 +270,18 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
         );
 
         for (uint256 i = 0; i < _collateralUpdate.newCollateralVaults.length; i++) {
-            console.log(
-                "queueCollateralUpdate ~ _collateralUpdate.newCollateralVaults[i] != address(0)",
-                _collateralUpdate.newCollateralVaults[i] != address(0)
-            );
             require(_collateralUpdate.newCollateralVaults[i] != address(0), "!newCollateralVaults[i]");
-            console.log(
-                "queueCollateralUpdate ~ _collateralUpdate.newCollateralAssets[i] != address(0)",
-                _collateralUpdate.newCollateralAssets[i] != address(0)
-            );
             require(_collateralUpdate.newCollateralAssets[i] != address(0), "!newCollateralAssets[i]");
 
             (, , address collateralAssetFromVault, , , ) = INeuronCollateralVault(
                 _collateralUpdate.newCollateralVaults[i]
             ).vaultParams();
-            console.log("queueCollateralUpdate ~ collateralAssetFromVault", collateralAssetFromVault);
 
-            console.log(
-                "queueCollateralUpdate ~ collateralAssetFromVault == _collateralUpdate.newCollateralAssets[i],",
-                collateralAssetFromVault == _collateralUpdate.newCollateralAssets[i]
-            );
             require(
                 collateralAssetFromVault == _collateralUpdate.newCollateralAssets[i],
                 "collateralAssetFromVault != newCollateralAssets[i]"
             );
 
-            console.log(
-                "queueCollateralUpdate ~ INeuronCollateralVault(_collateralUpdate.newCollateralVaults[i]).isDisabled()",
-                INeuronCollateralVault(_collateralUpdate.newCollateralVaults[i]).isDisabled()
-            );
             require(
                 !INeuronCollateralVault(_collateralUpdate.newCollateralVaults[i]).isDisabled(),
                 "newCollateralVault is disabled"
@@ -451,7 +433,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
         GnosisAuction.AuctionDetails memory auctionDetails;
 
         uint256 currONtokenPremium = currentONtokenPremium;
-        console.log("_startAuction ~ currONtokenPremium", currONtokenPremium);
 
         require(currONtokenPremium > 0, "!currentONtokenPremium");
 

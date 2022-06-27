@@ -8,8 +8,6 @@ import {VolOracle} from "./core/VolOracle.sol";
 import {Math} from "./libraries/Math.sol";
 import {PRBMathSD59x18} from "./libraries/PRBMathSD59x18.sol";
 
-import "hardhat/console.sol";
-
 contract TestVolOracle is VolOracle {
     using SafeMathLegacy for uint256;
     uint256 private _price;
@@ -20,7 +18,6 @@ contract TestVolOracle is VolOracle {
         require(observations[pool].length > 0, "!pool initialize");
 
         (uint32 commitTimestamp, uint32 gapFromPeriod) = secondsFromPeriod();
-        console.log("mockCommit ~ gapFromPeriod", gapFromPeriod);
         require(gapFromPeriod < commitPhaseDuration, "Not commit phase");
 
         uint256 price = getPrice(pool);

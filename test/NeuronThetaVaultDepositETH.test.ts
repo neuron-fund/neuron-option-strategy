@@ -38,7 +38,6 @@ runVaultTests('#depositETH', async function (params) {
         .deposit(depositAmount, NEURON_POOL_ETH, { value: depositAmount })
 
       const ct = await collateralVault.connect(userSigner).decimals()
-      console.log('ct', ct)
 
       const txReceipt = await tx.wait()
 

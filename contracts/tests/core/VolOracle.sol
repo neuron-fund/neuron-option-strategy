@@ -10,8 +10,6 @@ import {IERC20DetailedLegacy} from "../interfaces/IERC20DetailedLegacy.sol";
 import {Math} from "../libraries/Math.sol";
 import {PRBMathSD59x18} from "../libraries/PRBMathSD59x18.sol";
 
-import "hardhat/console.sol";
-
 abstract contract VolOracle {
     using SafeMathLegacy for uint256;
 

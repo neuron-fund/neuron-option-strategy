@@ -4,8 +4,6 @@ pragma solidity 0.8.9;
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {Vault} from "./Vault.sol";
 
-import "hardhat/console.sol";
-
 library ShareMath {
     using SafeMath for uint256;
 
@@ -51,13 +49,8 @@ library ShareMath {
         uint256 assetPerShare,
         uint256 decimals
     ) internal view returns (uint256 unredeemedShares) {
-        console.log(")internalpurereturns ~ depositReceipt.round", depositReceipt.round);
-        console.log(")internalpurereturns ~ depositReceipt.round < currentRound", depositReceipt.round < currentRound);
-        console.log(")internalpurereturns ~ depositReceipt.unredeemedShares", depositReceipt.unredeemedShares);
-        console.log("depositReceipt.amount", depositReceipt.amount);
         if (depositReceipt.round > 0 && depositReceipt.round < currentRound) {
             uint256 sharesFromRound = assetToShares(depositReceipt.amount, assetPerShare, decimals);
-            console.log(")internalpurereturns ~ sharesFromRound", sharesFromRound);
 
             return uint256(depositReceipt.unredeemedShares).add(sharesFromRound);
         }

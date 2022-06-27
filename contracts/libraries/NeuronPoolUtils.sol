@@ -10,8 +10,6 @@ import {IWETH} from "../interfaces/IWETH.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
 
-import "hardhat/console.sol";
-
 library NeuronPoolUtils {
     using SafeMath for uint256;
     using SupportsNonCompliantERC20 for IERC20;
@@ -91,7 +89,6 @@ library NeuronPoolUtils {
             require(success, "!success");
             return;
         }
-        console.log("recipient", recipient);
         IERC20(asset).safeTransfer(recipient, amount);
     }
 

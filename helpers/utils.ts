@@ -5,8 +5,15 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { BigNumber, Contract, Signer } from 'ethers'
 import { wmul } from '../helpers/math'
 import { getAsset } from './funds'
-import { IGnosisAuction, IOracle__factory } from '../typechain-types'
+import {
+  IChainlinkAggregator__factory,
+  IGnosisAuction,
+  INeuronPoolChainlinkPricer__factory,
+  INeuronPoolPricer__factory,
+  IOracle__factory,
+} from '../typechain-types'
 import { USDC } from '../constants/externalAddresses'
+import { chainlinkAggregators } from '../constants/chainlinkAggregators'
 import { IWhitelist__factory } from '../typechain-types'
 const { provider } = ethers
 const { parseEther } = ethers.utils
@@ -92,13 +99,37 @@ export async function setOracleExpiryPriceNeuron(
   underlyingOracle: Contract,
   underlyingSettlePrice: BigNumber,
   collateralPricers: Contract[],
-  expiry: BigNumber
+  expiry: BigNumber,
+  additionalPricers?: {
+    pricerName: string
+    asset: string
+  }[]
 ) {
-  const { oracleOwner } = await getOracle()
+  const { oracleOwner, oracle } = await getOracle()
   await increaseTo(expiry.toNumber() + ORACLE_LOCKING_PERIOD + 1)
 
   const res = await underlyingOracle.setExpiryPrice(underlyingAsset, expiry, underlyingSettlePrice)
   await res.wait()
+
+  for (const additionalPricer of additionalPricers || []) {
+    const isChainLink = additionalPricer.pricerName.toLowerCase().includes('chainlink')
+
+    if (isChainLink) {
+      const aggregator = chainlinkAggregators[additionalPricer.asset]
+      if (!aggregator) {
+        throw Error('No aggregator found for asset: ' + additionalPricer.asset)
+      }
+
+      const lastRound = await IChainlinkAggregator__factory.connect(aggregator, oracleOwner).latestRound()
+      const pricerDeployment = await deployments.get(additionalPricer.pricerName)
+      const pricer = await INeuronPoolChainlinkPricer__factory.connect(pricerDeployment.address, oracleOwner)
+      await oracle.setStablePrice(additionalPricer.asset, underlyingSettlePrice)
+    } else {
+      const pricerDeployment = await deployments.get(additionalPricer.pricerName)
+      const pricer = await INeuronPoolPricer__factory.connect(pricerDeployment.address, oracleOwner)
+      await pricer.setExpiryPriceInOracle(expiry)
+    }
+  }
 
   let receipt
   for (const collateralPricer of collateralPricers) {

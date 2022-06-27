@@ -1,5 +1,4 @@
 import { BigNumber } from 'ethers'
-import { CHAINID } from '../constants/constants'
 import { assert } from '../helpers/assertions'
 import { depositIntoCollateralVault } from '../helpers/neuronCollateralVault'
 import { runVaultTests } from '../helpers/runVaultTests'
@@ -32,7 +31,7 @@ runVaultTests('#accountVaultBalance', async function (params) {
       // remain the same after deposit
       assert.bnEqual(await collateralVault.connect(userSigner).accountVaultBalance(user), BigNumber.from(depositAmount))
 
-      const AMOUNT = '100000000000'
+      const AMOUNT = '10000'
 
       const settlementPriceITM = isPut ? firstOptionStrike.sub(AMOUNT) : firstOptionStrike.add(AMOUNT)
 

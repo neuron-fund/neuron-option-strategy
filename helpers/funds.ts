@@ -21,6 +21,7 @@ import {
   LUSD,
 } from '../constants/externalAddresses'
 import { parseEther } from '@ethersproject/units'
+import { IERC20__factory } from '../typechain-types'
 
 export const whales = {
   [WBTC]: '0xe3dd3914ab28bb552d41b8dfe607355de4c37a51',
@@ -60,7 +61,11 @@ export const getAsset = async (asset: string, amount: BigNumber, recipient: stri
     params: [whaleAddress],
   })
   const whale = await ethers.getSigner(whaleAddress)
-  const assetContract = await ethers.getContractAt('IERC20', asset)
+  const assetContract = await IERC20__factory.connect(asset, whale)
+  const whaleBalance = await assetContract.connect(whale).balanceOf(whale.address)
+  if (whaleBalance.lt(amount)) {
+    throw Error(`Whale balance of ${asset} is less than ${amount}`)
+  }
   await assetContract.connect(whale).transfer(recipient, amount)
   await network.provider.request({
     method: 'hardhat_stopImpersonatingAccount',

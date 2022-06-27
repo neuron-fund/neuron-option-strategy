@@ -5,19 +5,17 @@ import { deployNeuronCollateralVault, depositIntoCollateralVault } from '../help
 import { runVaultTests } from '../helpers/runVaultTests'
 import { setOracleExpiryPriceNeuron, setupOracle, whitelistProduct } from '../helpers/utils'
 import * as time from '../helpers/time'
-import { deployments, ethers } from 'hardhat'
+import { ethers } from 'hardhat'
 import { IONtoken__factory } from '../typechain-types'
 import { depositToNeuronPool } from '../helpers/neuronPool'
 
 runVaultTests('#updateCollateral', async function (params) {
   const {
-    user,
     userSigner,
     ownerSigner,
     collateralVaults,
     collateralAssetsContracts,
     firstOptionStrike,
-    rollToNextOption,
     depositAmount,
     collateralAssetsOracles,
     vault,
@@ -34,7 +32,6 @@ runVaultTests('#updateCollateral', async function (params) {
     tokenName,
     tokenSymbol,
     adminSigner,
-    marginPoolAddress,
     isPut,
     minimumSupply,
     collateralVaultLifecycleLib,

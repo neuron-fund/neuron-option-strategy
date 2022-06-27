@@ -65,11 +65,15 @@ library GnosisAuction {
         // shift decimals to correspond to decimals of USDC for puts
         // and underlying for calls
         uint256 minBidAmount = DSMath.wmul(onTokenSellAmount.mul(10**10), auctionDetails.onTokenPremium);
+        console.log("startAuction ~ onTokenSellAmount.mul(10**10)", onTokenSellAmount.mul(10**10));
+        console.log("startAuction ~ auctionDetails.onTokenPremium", auctionDetails.onTokenPremium);
+        console.log("startAuction ~ minBidAmount", minBidAmount);
 
         minBidAmount = auctionDetails.assetDecimals > 18
             ? minBidAmount.mul(10**(auctionDetails.assetDecimals.sub(18)))
             : minBidAmount.div(10**(uint256(18).sub(auctionDetails.assetDecimals)));
 
+        console.log("startAuction ~ minBidAmount", minBidAmount);
         require(minBidAmount <= type(uint96).max, "optionPremium * onTokenSellAmount > type(uint96) max value!");
 
         uint256 auctionEnd = block.timestamp.add(auctionDetails.duration);

@@ -74,6 +74,8 @@ contract OptionsPremiumPricer {
         require(expiryTimestamp > block.timestamp, "Expiry must be in the future!");
 
         uint256 spotPrice = priceOracle.latestAnswer();
+        console.log(")externalviewreturns ~ spotPrice", spotPrice);
+        console.log("st", st);
 
         (uint256 sp, uint256 v, uint256 t) = blackScholesParams(spotPrice, expiryTimestamp);
 
@@ -83,8 +85,7 @@ contract OptionsPremiumPricer {
         console.log(")externalviewreturns ~ stablesOracleDecimals", stablesOracleDecimals);
         // Multiplier to convert oracle latestAnswer to 18 decimals
         uint256 assetOracleMultiplier = 10**(uint256(18).sub(isPut ? stablesOracleDecimals : priceOracleDecimals));
-        // Make option premium denominated in the underlying
-        // asset for call vaults and USDC for put vaults
+        // Make option premium denominated in the USDC
         premium = isPut
             ? DSMath.wdiv(put, stablesOracle.latestAnswer().mul(assetOracleMultiplier))
             : DSMath.wdiv(call, spotPrice.mul(assetOracleMultiplier));

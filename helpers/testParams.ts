@@ -1,7 +1,7 @@
 import { parseEther, parseUnits } from '@ethersproject/units'
 import { BigNumber } from 'ethers'
 import { CHAINLINK_WETH_PRICER_NEW, CHAINLINK_WETH_PRICER } from '../constants/constants'
-import { WETH, USDC } from '../constants/externalAddresses'
+import { WETH, USDC, STETH } from '../constants/externalAddresses'
 import { getDeltaStep } from './utils'
 import { VaultTestParams } from './vault'
 
@@ -38,6 +38,12 @@ export const NeuronEthThetaVaultCallTestParams: VaultTestParams = {
   strikeAsset: USDC,
   neuronPoolsNames: ['NeuronPoolCurveSTETH', 'NeuronPoolCurveALETH'],
   neuronPoolsPricersNames: ['NeuronPoolCurveSTETHPricer', 'NeuronPoolCurveALETHPricer'],
+  additionalPricers: [
+    {
+      asset: STETH,
+      pricerName: 'ChainLinkPricerSTETH',
+    },
+  ],
   chainlinkPricer: CHAINLINK_WETH_PRICER_NEW,
   underlyingPricer: CHAINLINK_WETH_PRICER,
   deltaFirstOption: BigNumber.from('1000'),
@@ -55,4 +61,4 @@ export const NeuronEthThetaVaultCallTestParams: VaultTestParams = {
   collateralVaultCap: parseUnits('50000', 18),
 }
 
-export const testsParams: VaultTestParams[] = [NeuronEthThetaVaultPutTestParams /* NeuronEthThetaVaultCallTestParams */]
+export const testsParams: VaultTestParams[] = [NeuronEthThetaVaultPutTestParams, NeuronEthThetaVaultCallTestParams]

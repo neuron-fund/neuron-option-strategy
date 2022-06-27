@@ -32,6 +32,7 @@ runVaultTests('#commitAndClose', async function (params) {
     keeperSigner,
     firstOption,
     optionsPremiumPricer,
+    auctionBiddingTokenDecimals,
   } = params
   const provider = ethers.provider
 
@@ -153,6 +154,11 @@ runVaultTests('#commitAndClose', async function (params) {
         .div(bidMultiplier)
 
       let bid = wmul(totalOptionsAvailableToBuy.mul(BigNumber.from(10).pow(10)), firstOptionPremium)
+
+      bid =
+        auctionBiddingTokenDecimals > 18
+          ? bid.mul(BigNumber.from(10).pow(auctionBiddingTokenDecimals - 18))
+          : bid.div(BigNumber.from(10).pow(18 - auctionBiddingTokenDecimals))
 
       const queueStartElement = '0x0000000000000000000000000000000000000000000000000000000000000001'
       await getAsset(auctionBiddingTokenContract.address, bid, userSigner.address)

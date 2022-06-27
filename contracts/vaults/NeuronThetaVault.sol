@@ -451,6 +451,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
         GnosisAuction.AuctionDetails memory auctionDetails;
 
         uint256 currONtokenPremium = currentONtokenPremium;
+        console.log("_startAuction ~ currONtokenPremium", currONtokenPremium);
 
         require(currONtokenPremium > 0, "!currentONtokenPremium");
 

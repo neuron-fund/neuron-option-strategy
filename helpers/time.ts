@@ -45,7 +45,7 @@ export async function takeSnapshot() {
 }
 
 export async function revertToSnapShot(id: string) {
-  await ethers.provider.send('evm_revert', [id])
+  return await ethers.provider.send('evm_revert', [id])
 }
 
 export function revertToSnapshotAfterTest() {

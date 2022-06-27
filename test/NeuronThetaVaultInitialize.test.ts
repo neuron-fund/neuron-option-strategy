@@ -47,14 +47,7 @@ runVaultTests('#initialize', async function (params) {
       NeuronPoolUtils: neuronPoolUtilsLib.address,
     },
   })
-  const vaultDeployArgs = [
-    WETH,
-    USDC,
-    ON_TOKEN_FACTORY[chainId],
-    GAMMA_CONTROLLER[chainId],
-    MARGIN_POOL[chainId],
-    GNOSIS_EASY_AUCTION[chainId],
-  ] as const
+  const vaultDeployArgs = [WETH, USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION] as const
   const testVaultLogic = await NeuronThetaVault.deploy(...vaultDeployArgs)
   const initializeTestVault = async initializeArgs => {
     const AdminUpgradeabilityProxy = (await ethers.getContractFactory(
@@ -71,7 +64,7 @@ runVaultTests('#initialize', async function (params) {
         const [isPut, decimals, assetFromContract, underlyingFromContract, minimumSupply, cap] =
           await collateralVault.getVaultParams()
         assert.equal(decimals, tokenDecimals)
-        assert.equal(assetFromContract, collateralUnwrappedAssets[i])
+        assert.equal(assetFromContract, collateralAssetsAddresses[i])
         assert.equal(asset, underlyingFromContract)
         assert.equal(await vault.WETH(), WETH)
         assert.equal(await vault.USDC(), USDC)
@@ -99,8 +92,10 @@ runVaultTests('#initialize', async function (params) {
         managementFee.mul(FEE_SCALING).div(WEEKS_PER_YEAR).toString()
       )
       assert.equal((await vault.performanceFee()).toString(), performanceFee.toString())
-      const [isPut, decimals, collateralAssetsFromContract, , underlyingFromContract] = await vault.getVaultParams()
+      const [isPut, collateralAssetsFromContract, underlyingFromContract, collateralVaultsFromContract] =
+        await vault.getVaultParams()
       collateralAssetsAddresses.forEach((x, i) => assert.equal(x, collateralAssetsFromContract[i]))
+      collateralVaultsAddresses.forEach((x, i) => assert.equal(x, collateralVaultsFromContract[i]))
       assert.equal(asset, underlyingFromContract)
       assert.equal(await vault.WETH(), WETH)
       assert.equal(await vault.USDC(), USDC)
@@ -214,13 +209,7 @@ runVaultTests('#initialize', async function (params) {
           strikeSelection.address,
           premiumDiscount,
           [auctionDuration, auctionBiddingToken],
-          [
-            isPut,
-            tokenDecimals,
-            [constants.AddressZero, collateralAssetsAddresses[0]],
-            asset,
-            collateralVaultsAddresses,
-          ],
+          [isPut, [constants.AddressZero, collateralAssetsAddresses[0]], asset, collateralVaultsAddresses],
         ])
       ).to.be.revertedWith('zero address collateral asset')
     })

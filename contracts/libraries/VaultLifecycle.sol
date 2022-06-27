@@ -91,7 +91,7 @@ library VaultLifecycle {
             );
         }
 
-        address premiumCalcToken = isPut ? _usdc : underlying;
+        address premiumCalcToken = _usdc;
         if (premiumCalcToken != closePremiumParams.auctionBiddingToken) {
             // get the black scholes premium of the option
             premium = GnosisAuction.getONTokenPremiumInToken(

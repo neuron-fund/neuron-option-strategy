@@ -18,6 +18,7 @@ import {
   setAssetPricer,
   convertPriceAmount,
   setOracleExpiryPriceNeuron,
+  getOracle,
 } from '../helpers/utils'
 import { prepareNeuronPool } from '../helpers/neuronPool'
 import { UNIV3_ETH_USDC_POOL, UNIV3_WBTC_USDC_POOL, USDC, WETH } from '../constants/externalAddresses'
@@ -90,7 +91,7 @@ export type VaultTestParams = {
   /**  neuronPoolsPricersNames - names of Neuron Pools Pricers, should be in same order as neuronPoolsNames provided */
   neuronPoolsPricersNames: string[]
   /** neuron pools additional pricers names */
-  additionalPricersNames?: {
+  additionalPricers?: {
     pricerName: string
     asset: string
   }[]
@@ -98,7 +99,7 @@ export type VaultTestParams = {
   deltaFirstOption: BigNumber
   /** deltaSecondOption - Delta of second option */
   deltaSecondOption: BigNumber
-  /** deltaStep - Step to use for xiterating over strike prices and corresponding deltas */
+  /** deltaStep - Step to use for iterating over strike prices and corresponding deltas */
   deltaStep: BigNumber
   /** underlyingPricer */
   underlyingPricer: string
@@ -208,7 +209,8 @@ export async function initiateVault(params: VaultTestParams) {
       oracle,
       settlementPrice,
       collateralAssetsOracles,
-      await getCurrentOptionExpiry()
+      await getCurrentOptionExpiry(),
+      params.additionalPricers
     )
     await strikeSelection.setDelta(params.deltaSecondOption)
     await vault.connect(ownerSigner).commitAndClose()
@@ -305,11 +307,6 @@ export async function initiateVault(params: VaultTestParams) {
 
   gnosisAuction = IGnosisAuction__factory.connect(GNOSIS_EASY_AUCTION, ownerSigner)
 
-  for (const additionalPricer of params?.additionalPricersNames || []) {
-    const additionalPricerDeployment = await deployments.get(additionalPricer.pricerName)
-    await setAssetPricer(additionalPricer.asset, additionalPricerDeployment.address)
-  }
-
   collateralAssetsContracts = []
   collateralAssetsAddresses = []
   const collateralUnwrappedAssets: string[] = []
@@ -397,7 +394,7 @@ export async function initiateVault(params: VaultTestParams) {
   firstOptionPremium = BigNumber.from(
     await optionsPremiumPricer.getPremium(firstOptionStrike, firstOptionExpiry, params.isPut)
   )
-  premiumCalcToken = isPut ? params.strikeAsset : underlying
+  premiumCalcToken = params.strikeAsset
 
   if (auctionBiddingTokenContract.address !== premiumCalcToken) {
     firstOptionPremium = await convertPriceAmount(
@@ -422,6 +419,11 @@ export async function initiateVault(params: VaultTestParams) {
     address: firstOptionAddress,
     strikePrice: firstOptionStrike,
     expiry: firstOptionExpiry,
+  }
+
+  for (const additionalPricer of params?.additionalPricers || []) {
+    const { oracle } = await getOracle()
+    await oracle.setStablePrice(additionalPricer.asset, firstOption.strikePrice)
   }
 
   // Create second option

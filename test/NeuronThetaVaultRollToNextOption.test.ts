@@ -64,11 +64,11 @@ runVaultTests('#rollToNextOption', async function (params) {
   depositedCollateralsAmounts[0] = collateralAmountDeposited
 
   return () => {
-    xit('reverts when not called with keeper', async function () {
+    it('reverts when not called with keeper', async function () {
       await expect(vault.connect(ownerSigner).rollToNextOption()).to.be.revertedWith('!keeper')
     })
 
-    xit('mints onTokens and deposits collateral into vault', async function () {
+    it('mints onTokens and deposits collateral into vault', async function () {
       const startMarginBalance = await underlyingContract.balanceOf(marginPoolAddress)
 
       await vault.connect(ownerSigner).commitAndClose()
@@ -98,7 +98,7 @@ runVaultTests('#rollToNextOption', async function (params) {
       assert.equal(await vault.currentOption(), defaultONtokenAddress)
     })
 
-    xit('starts auction with correct parameters', async function () {
+    it('starts auction with correct parameters', async function () {
       await vault.connect(ownerSigner).commitAndClose()
 
       await time.increaseTo((await vault.nextOptionReadyAt()).toNumber() + 1)
@@ -151,7 +151,7 @@ runVaultTests('#rollToNextOption', async function (params) {
       // assert.equal(initialAuctionOrder.buyAmount.toString(), bid.toString())
     })
 
-    xit('reverts when calling before expiry', async function () {
+    it('reverts when calling before expiry', async function () {
       // "Controller: can not settle vault with un-expired onToken",
       const EXPECTED_ERROR = 'C25'
 
@@ -214,7 +214,7 @@ runVaultTests('#rollToNextOption', async function (params) {
       const afterCollateralAmounts = [...depositedCollateralsAmounts]
       afterCollateralAmounts[0] = BigNumber.from(afterBalance).sub(beforeBalance)
 
-      // test that the vault's balance decreased after closing short when xITM
+      // test that the vault's balance decreased after closing short when ITM
       assert.isAbove(parseInt(depositAmount.toString()), parseInt(afterCollateralAmounts[0].toString()))
 
       await expect(firstCloseTx)
@@ -239,7 +239,7 @@ runVaultTests('#rollToNextOption', async function (params) {
       assert.bnEqual(await neuronPool.balanceOf(collateralVault.address), BigNumber.from(0))
     })
 
-    xit('withdraws and roll funds into next option, after expiry OTM', async function () {
+    it('withdraws and roll funds into next option, after expiry OTM', async function () {
       const firstOptionAddress = firstOption.address
       const secondOptionAddress = secondOption.address
 
@@ -360,7 +360,7 @@ runVaultTests('#rollToNextOption', async function (params) {
       assert.bnEqual(await neuronPool.balanceOf(collateralVault.address), BigNumber.from(0))
     })
 
-    xit('withdraws and roll funds into next option, after expiry OTM (initiateWithdraw)', async function () {
+    it('withdraws and roll funds into next option, after expiry OTM (initiateWithdraw)', async function () {
       await depositIntoCollateralVault(collateralVault, neuronPool, depositAmount, ownerSigner)
       await vault.connect(ownerSigner).commitAndClose()
       await time.increaseTo((await vault.nextOptionReadyAt()).toNumber() + 1)
@@ -447,7 +447,7 @@ runVaultTests('#rollToNextOption', async function (params) {
       assert.bnEqual(vaultFees, secondInitialBalance.sub(await collateralVault.totalBalance()))
     })
 
-    xit('is not able to roll to new option consecutively without setNextOption', async function () {
+    it('is not able to roll to new option consecutively without setNextOption', async function () {
       await vault.connect(ownerSigner).commitAndClose()
       await time.increaseTo((await vault.nextOptionReadyAt()).toNumber() + 1)
 
@@ -456,7 +456,7 @@ runVaultTests('#rollToNextOption', async function (params) {
       await expect(vault.connect(keeperSigner).rollToNextOption()).to.be.revertedWith('!nextOption')
     })
 
-    xit('does not debit the user on first deposit', async () => {
+    it('does not debit the user on first deposit', async () => {
       await vault.connect(ownerSigner).commitAndClose()
       await time.increaseTo((await vault.nextOptionReadyAt()).toNumber() + 1)
 

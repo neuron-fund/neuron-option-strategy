@@ -17,8 +17,6 @@ import {NeuronPoolUtils} from "../libraries/NeuronPoolUtils.sol";
 import {ShareMath} from "../libraries/ShareMath.sol";
 import {NeuronCollateralVaultStorage} from "../storage/NeuronCollateralVaultStorage.sol";
 
-import "hardhat/console.sol";
-
 contract NeuronCollateralVault is
     ReentrancyGuardUpgradeable,
     OwnableUpgradeable,
@@ -287,7 +285,6 @@ contract NeuronCollateralVault is
             amount,
             collateralToken.pricePerShare().mul(NeuronPoolUtils.decimalShift(address(collateralToken)))
         );
-        console.log("_depositYieldToken ~ amountInAsset", amountInAsset);
 
         _depositFor(amountInAsset, creditor);
     }
@@ -302,8 +299,6 @@ contract NeuronCollateralVault is
         uint256 totalWithDepositedAmount = totalBalance();
         require(totalWithDepositedAmount <= vaultParams.cap, "Exceed cap");
         require(totalWithDepositedAmount >= vaultParams.minimumSupply, "Insufficient balance");
-        console.log("_depositFor ~ totalWithDepositedAmount", totalWithDepositedAmount);
-        console.log("_depositFor ~ vaultParams.minimumSupply", vaultParams.minimumSupply);
 
         emit Deposit(creditor, amount, currentRound);
 
@@ -369,7 +364,6 @@ contract NeuronCollateralVault is
         uint256 newQueuedWithdrawShares = uint256(vaultState.queuedWithdrawShares).add(numShares);
         ShareMath.assertUint128(newQueuedWithdrawShares);
         vaultState.queuedWithdrawShares = uint128(newQueuedWithdrawShares);
-        console.log("BEFORE SHARE TRANSFER");
         _transfer(msg.sender, address(this), numShares);
     }
 
@@ -395,7 +389,6 @@ contract NeuronCollateralVault is
      * @param isMax is flag for when callers do a max redemption
      */
     function _redeem(uint256 numShares, bool isMax) internal {
-        console.log("_redeem ~ numShares", numShares);
         Vault.DepositReceipt memory depositReceipt = depositReceipts[msg.sender];
 
         // This handles the null case when depositReceipt.round = 0
@@ -408,10 +401,8 @@ contract NeuronCollateralVault is
             vaultParams.decimals
         );
 
-        console.log("_redeem ~ unredeemedShares", unredeemedShares);
         numShares = isMax ? unredeemedShares : numShares;
         if (numShares == 0) {
-            console.log("_redeem ~ numShares == 0", numShares == 0);
             return;
         }
         require(numShares <= unredeemedShares, "Exceeds available");
@@ -428,8 +419,6 @@ contract NeuronCollateralVault is
         depositReceipts[msg.sender].unredeemedShares = uint128(unredeemedShares.sub(numShares));
 
         emit Redeem(msg.sender, numShares, depositReceipt.round);
-        console.log("BEFORE REDEEM TRASNFER");
-        console.log("_redeem ~ numShares", numShares);
         _transfer(address(this), msg.sender, numShares);
     }
 
@@ -442,6 +431,8 @@ contract NeuronCollateralVault is
      * @param amount is the amount to withdraw
      */
     function withdrawInstantly(uint256 amount, address _withdrawToken) external nonReentrant {
+        require(vaultState.isDisabled, "vault is disabled, use withdrawIfDisabled");
+
         Vault.DepositReceipt storage depositReceipt = depositReceipts[msg.sender];
 
         uint256 currentRound = vaultState.round;
@@ -466,10 +457,43 @@ contract NeuronCollateralVault is
         }
     }
 
+    function withdrawIfDisabled(address _withdrawToken) external nonReentrant returns (uint256) {
+        require(vaultState.isDisabled, "vault is not disabled");
+
+        // We do a max redeem before initiating a withdrawal
+        // But we check if they must first have unredeemed shares
+        if (depositReceipts[msg.sender].amount > 0 || depositReceipts[msg.sender].unredeemedShares > 0) {
+            _redeem(0, true);
+        }
+
+        uint256 withdrawalShares = balanceOf(msg.sender);
+
+        uint256 withdrawAmount = ShareMath.sharesToAsset(
+            withdrawalShares,
+            roundPricePerShare[vaultState.round - 1],
+            vaultParams.decimals
+        );
+        require(withdrawAmount > 0, "!withdrawAmount");
+
+        emit Withdraw(msg.sender, withdrawAmount, withdrawalShares);
+
+        _burn(address(this), withdrawalShares);
+
+        if (_withdrawToken == address(collateralToken)) {
+            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, withdrawAmount);
+        } else {
+            NeuronPoolUtils.unwrapNeuronPool(withdrawAmount, _withdrawToken, address(collateralToken));
+            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, withdrawAmount);
+        }
+
+        return withdrawAmount;
+    }
+
     /**
      * @notice Completes a scheduled withdrawal from a past round. Uses finalized pps for the round
      */
     function completeWithdraw(address _withdrawToken) external nonReentrant {
+        require(!vaultState.isDisabled, "vault is disabled, use withdrawIfDisabled");
         uint256 withdrawAmount = _completeWithdraw(_withdrawToken);
         lastQueuedWithdrawAmount = uint128(uint256(lastQueuedWithdrawAmount).sub(withdrawAmount));
     }

@@ -431,7 +431,7 @@ contract NeuronCollateralVault is
      * @param amount is the amount to withdraw
      */
     function withdrawInstantly(uint256 amount, address _withdrawToken) external nonReentrant {
-        require(vaultState.isDisabled, "vault is disabled, use withdrawIfDisabled");
+        require(!vaultState.isDisabled, "vault is disabled, use withdrawIfDisabled");
 
         Vault.DepositReceipt storage depositReceipt = depositReceipts[msg.sender];
 

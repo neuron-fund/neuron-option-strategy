@@ -13,19 +13,10 @@ async function runTest(testFilePath: string) {
   })
 }
 
-async function runAllTests() {
+export async function runAllTests() {
   const testsFilesRelativePaths = fs.readdirSync(testsFolderAbsolutePath).map(f => `./test/${f}`)
 
   for (const testFileRelativePath of testsFilesRelativePaths) {
     await runTest(testFileRelativePath)
   }
 }
-
-runAllTests()
-  .then(() => {
-    process.exit(0)
-  })
-  .catch(e => {
-    console.error(e)
-    process.exit(1)
-  })

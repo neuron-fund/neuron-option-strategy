@@ -13,8 +13,7 @@ import { HardhatUserConfig } from 'hardhat/types'
 
 process.env.TEST_MNEMONIC = 'test test test test test test test test test test test junk'
 
-// Defaults to CHAINID=1 so things will run with mainnet fork if not specified
-const CHAINID = process.env.CHAINID ? Number(process.env.CHAINID) : 1
+const CHAINID = 1337
 
 const config: HardhatUserConfig = {
   paths: {

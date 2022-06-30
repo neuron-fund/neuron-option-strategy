@@ -19,7 +19,7 @@ export function copyJsonFromDirToDeployments(sourceDir: string) {
   })
 }
 
-function getExternalDivPathFromEnv(varName: string) {
+export function getExternalDirPathFromEnv(varName: string) {
   const envPath = process.env[varName]
   if (!envPath) {
     throw new Error(`Enviroment variable ${varName} is not set`)
@@ -44,7 +44,7 @@ function getExternalDivPathFromEnv(varName: string) {
 }
 
 export function getDeploymentsDirFromEnv(varName: string) {
-  const externalDirResolvedPath = getExternalDivPathFromEnv(varName)
+  const externalDirResolvedPath = getExternalDirPathFromEnv(varName)
 
   const deploymentsDirPath = path.resolve(externalDirResolvedPath, './deployments/localhost')
 
@@ -58,7 +58,7 @@ export function getDeploymentsDirFromEnv(varName: string) {
 }
 
 export function getArtifactsDirFromEnv(varName: string) {
-  const externalDirResolvedPath = getExternalDivPathFromEnv(varName)
+  const externalDirResolvedPath = getExternalDirPathFromEnv(varName)
 
   const artifactsDirPath = path.resolve(externalDirResolvedPath, './artifacts')
 

@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { ChildProcess, spawn } from 'node:child_process'
+import path from 'node:path'
 import fs from 'fs'
 import { getExternalDirPathFromEnv } from './importLocalNeuronDeployments'
 import { runAllTests } from './runAllTests'
@@ -32,6 +33,7 @@ async function runE2E() {
       NEURON_OPTIONS_PATH,
     })
     console.log('Run tests')
+    await genTypechain(path.resolve(__dirname, '../'))
     await runAllTests()
   } catch (e) {
     console.error(e)

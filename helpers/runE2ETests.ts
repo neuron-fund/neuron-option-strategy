@@ -33,6 +33,9 @@ async function runE2E() {
     })
     console.log('Run tests')
     await runAllTests()
+  } catch (e) {
+    console.error(e)
+    process.exit(1)
   } finally {
     forkProcess.kill()
   }

@@ -103,12 +103,16 @@ async function runNodeAndDeployOptions({ NEURON_OPTIONS_PATH, RPC_URL }): Promis
   fs.writeFileSync(`${NEURON_OPTIONS_PATH}/.env`, envFileContent)
 
   const forkProcess = spawn('npx', ['hardhat', 'node'], { cwd: NEURON_OPTIONS_PATH })
+
   return new Promise((resolve, reject) => {
     forkProcess.stdout.on('data', data => {
       if (data.toString().includes('Started HTTP and WebSocket JSON-RPC server at')) {
         console.log(data.toString())
         resolve(forkProcess)
       }
+    })
+    forkProcess.stderr.on('data', data => {
+      reject(data.toString())
     })
   })
 }

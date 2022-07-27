@@ -432,6 +432,7 @@ contract NeuronCollateralVault is
      */
     function withdrawInstantly(uint256 amount, address _withdrawToken) external nonReentrant {
         require(!vaultState.isDisabled, "vault is disabled, use withdrawIfDisabled");
+        require(allowedDepositTokens[_withdrawToken], "!_withdrawToken");
 
         Vault.DepositReceipt storage depositReceipt = depositReceipts[msg.sender];
 
@@ -459,6 +460,7 @@ contract NeuronCollateralVault is
 
     function withdrawIfDisabled(address _withdrawToken) external nonReentrant returns (uint256) {
         require(vaultState.isDisabled, "vault is not disabled");
+        require(allowedDepositTokens[_withdrawToken], "!_withdrawToken");
 
         // We do a max redeem before initiating a withdrawal
         // But we check if they must first have unredeemed shares
@@ -494,6 +496,8 @@ contract NeuronCollateralVault is
      */
     function completeWithdraw(address _withdrawToken) external nonReentrant {
         require(!vaultState.isDisabled, "vault is disabled, use withdrawIfDisabled");
+        require(allowedDepositTokens[_withdrawToken], "!_withdrawToken");
+
         uint256 withdrawAmount = _completeWithdraw(_withdrawToken);
         lastQueuedWithdrawAmount = uint128(uint256(lastQueuedWithdrawAmount).sub(withdrawAmount));
     }

@@ -11,7 +11,6 @@ import {IONtokenFactory, IONtoken, IController, Actions, MarginVault} from "../i
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
 import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
-import {UniswapRouter} from "./UniswapRouter.sol";
 
 library VaultLifecycle {
     using SafeMath for uint256;
@@ -420,27 +419,6 @@ library VaultLifecycle {
      */
     function settleAuction(address gnosisEasyAuction, uint256 auctionID) internal {
         IGnosisAuction(gnosisEasyAuction).settleAuction(auctionID);
-    }
-
-    /**
-     * @notice Swaps tokens using UniswapV3 router
-     * @param tokenIn is the token address to swap
-     * @param tokenIn is the token address to swap to
-     * @param minAmountOut is the minimum acceptable amount of tokenOut received from swap
-     * @param router is the contract address of UniswapV3 router
-     * @param weth is the contract address of WETH
-     */
-    function swap(
-        address tokenIn,
-        address tokenOut,
-        uint256 minAmountOut,
-        address router,
-        address weth
-    ) external {
-        uint256 balance = IERC20(tokenIn).balanceOf(address(this));
-        if (balance > 0) {
-            UniswapRouter.swap(address(this), tokenIn, tokenOut, balance, minAmountOut, router, weth);
-        }
     }
 
     /**

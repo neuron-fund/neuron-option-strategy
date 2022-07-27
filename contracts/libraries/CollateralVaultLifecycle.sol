@@ -7,7 +7,6 @@ import {Vault} from "./Vault.sol";
 import {ShareMath} from "./ShareMath.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
-import {UniswapRouter} from "./UniswapRouter.sol";
 
 library CollateralVaultLifecycle {
     using SafeMath for uint256;

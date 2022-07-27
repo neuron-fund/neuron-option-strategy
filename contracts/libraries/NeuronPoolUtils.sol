@@ -48,26 +48,6 @@ library NeuronPoolUtils {
     }
 
     /**
-     * @notice Wraps the necessary amount of the base token to the yield-bearing yearn token
-     * @param asset is the vault asset address
-     * @param collateralToken is the address of the collateral token
-     */
-    function wrapToNeuronPool(address asset, address collateralToken) external {
-        uint256 amountToWrap = IERC20(asset).balanceOf(address(this));
-
-        if (amountToWrap > 0) {
-            IERC20(asset).safeApprove(collateralToken, amountToWrap);
-
-            // there is a slight imprecision with regards to calculating back from yearn token -> underlying
-            // that stems from miscoordination between ytoken .deposit() amount wrapped and pricePerShare
-            // at that point in time.
-            // ex: if I have 1 eth, deposit 1 eth into yearn vault and calculate value of yearn token balance
-            // denominated in eth (via balance(yearn token) * pricePerShare) we will get 1 eth - 1 wei.
-            INeuronPool(collateralToken).deposit(asset, amountToWrap);
-        }
-    }
-
-    /**
      * @notice Helper function to make either an ETH transfer or ERC20 transfer
      * @param weth is the weth address
      * @param asset is the vault asset address

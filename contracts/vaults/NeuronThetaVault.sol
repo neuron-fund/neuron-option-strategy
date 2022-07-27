@@ -255,7 +255,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      * @notice Optionality to set strike price manually
      * @param strikePrice is the strike price of the new onTokens (decimals = 8)
      */
-    function setStrikePrice(uint128 strikePrice) external onlyOwner nonReentrant {
+    function setStrikePrice(uint128 strikePrice) external onlyOwner {
         require(strikePrice > 0, "!strikePrice");
         uint16 round = vaultState.round;
         emit StrikePriceSet(lastStrikeOverrideRound, round, overriddenStrikePrice, strikePrice);

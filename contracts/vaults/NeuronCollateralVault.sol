@@ -538,7 +538,7 @@ contract NeuronCollateralVault is
      *         Having 1 initialized beforehand will not be an issue as long as we round down share calculations to 0.
      * @param numRounds is the number of rounds to initialize in the map
      */
-    function initRounds(uint256 numRounds) external nonReentrant {
+    function initRounds(uint256 numRounds) external {
         require(numRounds > 0, "!numRounds");
 
         uint256 _round = vaultState.round;

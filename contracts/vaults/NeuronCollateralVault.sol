@@ -133,10 +133,15 @@ contract NeuronCollateralVault is
         ShareMath.assertUint104(collateralAssetBalance);
         vaultState.lastLockedAmount = uint104(collateralAssetBalance);
 
+        address zeroAddress = address(0);
         for (uint256 i = 0; i < _baseDepositTokens.length; i++) {
-            allowedDepositTokens[_baseDepositTokens[i]] = true;
+            if (_baseDepositTokens[i] != zeroAddress) {
+                allowedDepositTokens[_baseDepositTokens[i]] = true;
+            }
         }
-        allowedDepositTokens[_vaultParams.collateralAsset] = true;
+        if (_vaultParams.collateralAsset != zeroAddress) {
+            allowedDepositTokens[_vaultParams.collateralAsset] = true;
+        }
 
         vaultState.round = 1;
     }

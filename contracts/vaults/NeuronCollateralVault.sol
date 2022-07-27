@@ -450,12 +450,16 @@ contract NeuronCollateralVault is
 
         emit InstantWithdraw(msg.sender, amount, currentRound);
 
-        if (_withdrawToken == address(collateralToken)) {
-            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, amount);
-        } else {
-            NeuronPoolUtils.unwrapNeuronPool(amount, _withdrawToken, address(collateralToken));
-            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, amount);
+        _transferAsset(_withdrawToken, amount);
+    }
+
+    function _transferAsset(address _withdrawToken, uint256 _amount) internal returns (uint256) {
+        address collateralTokenAddress = address(collateralToken);
+        if (_withdrawToken != collateralTokenAddress) {
+            _amount = NeuronPoolUtils.unwrapNeuronPool(_amount, _withdrawToken, collateralTokenAddress);
         }
+        NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, _amount);
+        return _amount;
     }
 
     function withdrawIfDisabled(address _withdrawToken) external nonReentrant returns (uint256) {
@@ -481,14 +485,7 @@ contract NeuronCollateralVault is
 
         _burn(address(this), withdrawalShares);
 
-        if (_withdrawToken == address(collateralToken)) {
-            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, withdrawAmount);
-        } else {
-            NeuronPoolUtils.unwrapNeuronPool(withdrawAmount, _withdrawToken, address(collateralToken));
-            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, withdrawAmount);
-        }
-
-        return withdrawAmount;
+        return _transferAsset(_withdrawToken, withdrawAmount);
     }
 
     /**
@@ -532,14 +529,7 @@ contract NeuronCollateralVault is
 
         _burn(address(this), withdrawalShares);
 
-        if (_withdrawToken == address(collateralToken)) {
-            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, withdrawAmount);
-        } else {
-            NeuronPoolUtils.unwrapNeuronPool(withdrawAmount, _withdrawToken, address(collateralToken));
-            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, withdrawAmount);
-        }
-
-        return withdrawAmount;
+        return _transferAsset(_withdrawToken, withdrawAmount);
     }
 
     /*

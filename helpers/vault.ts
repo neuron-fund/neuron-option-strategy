@@ -357,7 +357,7 @@ export async function initiateVault(params: VaultTestParams) {
     [isPut, collateralAssetsAddresses, underlying, collateralVaultsAddresses],
   ]
 
-  const vaultDeployArgs = [WETH, USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION]
+  const vaultDeployArgs = [USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION]
 
   vault = (
     await deployProxy('NeuronThetaVault', adminSigner, vaultInitializeArgs, vaultDeployArgs, {

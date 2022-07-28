@@ -54,9 +54,11 @@ library GnosisAuction {
     function startAuction(AuctionDetails calldata auctionDetails) internal returns (uint256 auctionID) {
         uint256 onTokenSellAmount = getONTokenSellAmount(auctionDetails.onTokenAddress);
 
-        IERC20Detailed(auctionDetails.onTokenAddress).safeApprove(
+        IERC20Detailed onToken = IERC20Detailed(auctionDetails.onTokenAddress);
+        onToken.safeApprove(auctionDetails.gnosisEasyAuction, 0);
+        onToken.safeApprove(
             auctionDetails.gnosisEasyAuction,
-            IERC20Detailed(auctionDetails.onTokenAddress).balanceOf(address(this))
+            onToken.balanceOf(address(this))
         );
 
         // minBidAmount is total onTokens to sell * premium per onToken

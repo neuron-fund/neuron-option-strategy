@@ -1,4 +1,5 @@
 {
+  "name": "neuron-options-strategy",
   "resolutions": {
     "elliptic": "^6.5.3",
     "lodash": "^4.17.20",

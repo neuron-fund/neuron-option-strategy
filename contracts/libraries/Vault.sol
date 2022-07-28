@@ -12,9 +12,6 @@ library Vault {
     // Premium discount has 1-decimal place. For example: 80 * 10**1 = 80%. Which represents a 20% discount.
     uint256 internal constant PREMIUM_DISCOUNT_MULTIPLIER = 10;
 
-    // Placeholder uint value to prevent cold writes
-    uint256 internal constant PLACEHOLDER_UINT = 1;
-
     struct CollateralVaultParams {
         // Option type the vault is selling
         bool isPut;

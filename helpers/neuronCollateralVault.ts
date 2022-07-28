@@ -51,7 +51,7 @@ export async function deployNeuronCollateralVault({
   collateralVaultLifecycleLib,
   neuronPoolUtilsLib,
 }) {
-  const collateralVaultDeployArgs = [WETH, USDC]
+  const collateralVaultDeployArgs = [USDC]
   const neuronPoolDeployment = await deployments.get(neuronPoolName)
   const neuronPool = INeuronPool__factory.connect(neuronPoolDeployment.address, ownerSigner)
   await prepareNeuronPool(neuronPool)

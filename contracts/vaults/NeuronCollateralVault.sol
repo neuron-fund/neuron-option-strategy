@@ -61,9 +61,6 @@ contract NeuronCollateralVault is
      *  IMMUTABLES & CONSTANTS
      ***********************************************/
 
-    /// @notice WETH9 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-    address public immutable WETH;
-
     /// @notice USDC 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
     address public immutable USDC;
 
@@ -72,7 +69,7 @@ contract NeuronCollateralVault is
     uint256 private constant WEEKS_PER_YEAR = 52142857;
 
     /// @notice Token address used to identify ETH deposits in NeuronPools
-    address public constant NEURON_POOL_ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /************************************************
      *  CONSTRUCTOR & INITIALIZATION
@@ -80,14 +77,10 @@ contract NeuronCollateralVault is
 
     /**
      * @notice Initializes the contract with immutable variables
-     * @param _weth is the Wrapped Ether contract
      * @param _usdc is the USDC contract
      */
-    constructor(address _weth, address _usdc) {
-        require(_weth != address(0), "!_weth");
+    constructor(address _usdc) {
         require(_usdc != address(0), "!_usdc");
-
-        WETH = _weth;
         USDC = _usdc;
     }
 
@@ -227,7 +220,7 @@ contract NeuronCollateralVault is
         require(_amount > 0, "!amount");
         require(allowedDepositTokens[_depositToken], "!_depositToken");
 
-        if (_depositToken == NEURON_POOL_ETH) {
+        if (_depositToken == ETH) {
             require(msg.value == _amount, "deposit ETH: msg.value != _amount");
         } else {
             require(msg.value == 0, "deposit non-ETH: msg.value != 0");
@@ -252,7 +245,7 @@ contract NeuronCollateralVault is
         require(_creditor != address(0), "!creditor");
         require(allowedDepositTokens[_depositToken], "!_depositToken");
 
-        if (_depositToken == NEURON_POOL_ETH) {
+        if (_depositToken == ETH) {
             require(msg.value == _amount, "deposit ETH: msg.value != _amount");
         } else {
             require(msg.value == 0, "deposit non-ETH: msg.value != 0");
@@ -266,7 +259,7 @@ contract NeuronCollateralVault is
         address _creditor,
         address _depositToken
     ) internal {
-        if (_depositToken != NEURON_POOL_ETH) {
+        if (_depositToken != ETH) {
             IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), _amount);
         }
 
@@ -274,7 +267,7 @@ contract NeuronCollateralVault is
             _depositYieldToken(_amount, _creditor);
         } else {
             INeuronPool _collateralToken = collateralToken;
-            if (_depositToken != NEURON_POOL_ETH) {
+            if (_depositToken != ETH) {
                 address collateralTokenAddress = address(_collateralToken);
                 IERC20(_depositToken).safeApprove(collateralTokenAddress, 0);
                 IERC20(_depositToken).safeApprove(collateralTokenAddress, _amount);
@@ -466,7 +459,7 @@ contract NeuronCollateralVault is
         if (_withdrawToken != collateralTokenAddress) {
             _amount = NeuronPoolUtils.unwrapNeuronPool(_amount, _withdrawToken, collateralTokenAddress);
         }
-        NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, _amount);
+        NeuronPoolUtils.transferAsset(_withdrawToken, msg.sender, _amount);
         return _amount;
     }
 
@@ -622,7 +615,7 @@ contract NeuronCollateralVault is
         _mint(address(this), mintShares);
 
         if (totalVaultFee > 0) {
-            NeuronPoolUtils.unwrapAndWithdraw(WETH, vaultParams.collateralAsset, totalVaultFee, recipient);
+            NeuronPoolUtils.unwrapAndWithdraw(vaultParams.collateralAsset, totalVaultFee, recipient);
         }
 
         return (queuedWithdrawAmount);

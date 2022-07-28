@@ -29,9 +29,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      *  IMMUTABLES & CONSTANTS
      ***********************************************/
 
-    /// @notice WETH9 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-    address public immutable WETH;
-
     /// @notice USDC 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
     address public immutable USDC;
 
@@ -103,7 +100,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
     /**
      * @notice Initializes the contract with immutable variables
-     * @param _weth is the Wrapped Ether contract
      * @param _usdc is the USDC contract
      * @param _onTokenFactory is the contract address for minting new option protocoloption types (strikes, asset, expiry)
      * @param _gammaController is the contract address for option protocolactions
@@ -111,21 +107,18 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      * @param _gnosisEasyAuction is the contract address that facilitates gnosis auctions
      */
     constructor(
-        address _weth,
         address _usdc,
         address _onTokenFactory,
         address _gammaController,
         address _marginPool,
         address _gnosisEasyAuction
     ) {
-        require(_weth != address(0), "!_weth");
         require(_usdc != address(0), "!_usdc");
         require(_gammaController != address(0), "!_gammaController");
         require(_marginPool != address(0), "!_marginPool");
         require(_gnosisEasyAuction != address(0), "!_gnosisEasyAuction");
         require(_onTokenFactory != address(0), "!_onTokenFactory");
         ON_TOKEN_FACTORY = _onTokenFactory;
-        WETH = _weth;
         USDC = _usdc;
         GAMMA_CONTROLLER = _gammaController;
         MARGIN_POOL = _marginPool;
@@ -364,7 +357,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
             if (collateralVaultPremiumShare != 0) {
                 NeuronPoolUtils.transferAsset(
-                    WETH,
                     auctionBiddingToken,
                     roundCollateralVaults[i],
                     collateralVaultPremiumShare
@@ -372,7 +364,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
             }
             if (collateralAssetBalance != 0) {
                 NeuronPoolUtils.transferAsset(
-                    WETH,
                     roundCollateralAssets[i],
                     roundCollateralVaults[i],
                     collateralAssetBalance

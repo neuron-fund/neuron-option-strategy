@@ -8,11 +8,9 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {INeuronPool} from "../interfaces/INeuronPool.sol";
 import {IWETH} from "../interfaces/IWETH.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
-import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
 
 library NeuronPoolUtils {
     using SafeMath for uint256;
-    using SupportsNonCompliantERC20 for IERC20;
     using SafeERC20 for IERC20;
 
     /**
@@ -36,7 +34,6 @@ library NeuronPoolUtils {
     }
 
     function unwrapAndWithdraw(
-        address weth,
         address neuronPool,
         uint256 amountToUnwrap,
         address to
@@ -44,18 +41,16 @@ library NeuronPoolUtils {
         address unwrapToAsset = INeuronPool(neuronPool).token();
         uint256 unwrappedAssetAmount = unwrapNeuronPool(amountToUnwrap, unwrapToAsset, neuronPool);
 
-        transferAsset(weth, unwrapToAsset, to, unwrappedAssetAmount);
+        transferAsset(unwrapToAsset, to, unwrappedAssetAmount);
     }
 
     /**
      * @notice Helper function to make either an ETH transfer or ERC20 transfer
-     * @param weth is the weth address
      * @param asset is the vault asset address
      * @param recipient is the receiving address
      * @param amount is the transfer amount
      */
     function transferAsset(
-        address weth,
         address asset,
         address recipient,
         uint256 amount
@@ -63,8 +58,7 @@ library NeuronPoolUtils {
         if (amount == 0) {
             return;
         }
-        if (asset == weth) {
-            IWETH(weth).withdraw(amount);
+        if (asset == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
             (bool success, ) = payable(recipient).call{value: amount}("");
             require(success, "!success");
             return;

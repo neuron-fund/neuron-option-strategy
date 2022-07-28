@@ -6,11 +6,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Vault} from "./Vault.sol";
 import {ShareMath} from "./ShareMath.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
-import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
 
 library CollateralVaultLifecycle {
     using SafeMath for uint256;
-    using SupportsNonCompliantERC20 for IERC20;
 
     /**
      * @param currentShareSupply is the supply of the shares invoked with totalSupply()

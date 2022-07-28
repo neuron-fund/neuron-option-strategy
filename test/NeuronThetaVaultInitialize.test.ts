@@ -47,7 +47,7 @@ runVaultTests('#initialize', async function (params) {
       NeuronPoolUtils: neuronPoolUtilsLib.address,
     },
   })
-  const vaultDeployArgs = [WETH, USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION] as const
+  const vaultDeployArgs = [USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION] as const
   const testVaultLogic = await NeuronThetaVault.deploy(...vaultDeployArgs)
   const initializeTestVault = async initializeArgs => {
     const TransparentUpgradeableProxy = (await ethers.getContractFactory(
@@ -66,7 +66,6 @@ runVaultTests('#initialize', async function (params) {
         assert.equal(decimals, tokenDecimals)
         assert.equal(assetFromContract, collateralAssetsAddresses[i])
         assert.equal(asset, underlyingFromContract)
-        assert.equal(await vault.WETH(), WETH)
         assert.equal(await vault.USDC(), USDC)
         assert.bnEqual(minimumSupply, BigNumber.from(params.minimumSupply))
         assert.equal(isPut, params.isPut)
@@ -97,7 +96,6 @@ runVaultTests('#initialize', async function (params) {
       collateralAssetsAddresses.forEach((x, i) => assert.equal(x, collateralAssetsFromContract[i]))
       collateralVaultsAddresses.forEach((x, i) => assert.equal(x, collateralVaultsFromContract[i]))
       assert.equal(asset, underlyingFromContract)
-      assert.equal(await vault.WETH(), WETH)
       assert.equal(await vault.USDC(), USDC)
       assert.equal(minimumSupply, params.minimumSupply)
       assert.equal(isPut, params.isPut)

@@ -3,6 +3,7 @@ pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Vault} from "./Vault.sol";
 import {ShareMath} from "./ShareMath.sol";
 import {IStrikeSelection} from "../interfaces/INeuron.sol";
@@ -10,12 +11,11 @@ import {GnosisAuction} from "./GnosisAuction.sol";
 import {IONtokenFactory, IONtoken, IController, Actions, MarginVault} from "../interfaces/GammaInterface.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
-import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
 
 library VaultLifecycle {
     using SafeMath for uint256;
-    using SupportsNonCompliantERC20 for IERC20;
-
+    using SafeERC20 for IERC20;
+    
     event BurnedOnTokens(address indexed ontokenAddress, uint256 amountBurned);
 
     struct CloseParams {
@@ -186,7 +186,8 @@ library VaultLifecycle {
         for (uint256 i = 0; i < collateralAssets.length; i++) {
             // double approve to fix non-compliant ERC20s
             IERC20 collateralToken = IERC20(collateralAssets[i]);
-            collateralToken.safeApproveNonCompliant(marginPool, depositAmounts[i]);
+            collateralToken.safeApprove(marginPool, 0);
+            collateralToken.safeApprove(marginPool, depositAmounts[i]);
         }
 
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](3);

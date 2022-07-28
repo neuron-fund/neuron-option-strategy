@@ -273,10 +273,13 @@ contract NeuronCollateralVault is
         if (_depositToken == vaultParams.collateralAsset) {
             _depositYieldToken(_amount, _creditor);
         } else {
+            INeuronPool _collateralToken = collateralToken;
             if (_depositToken != NEURON_POOL_ETH) {
-                IERC20(_depositToken).safeApprove(address(collateralToken), _amount);
+                address collateralTokenAddress = address(_collateralToken);
+                IERC20(_depositToken).safeApprove(collateralTokenAddress, 0);
+                IERC20(_depositToken).safeApprove(collateralTokenAddress, _amount);
             }
-            uint256 mintedCollateralTokens = collateralToken.deposit{value: _amount}(_depositToken, _amount);
+            uint256 mintedCollateralTokens = _collateralToken.deposit{value: _amount}(_depositToken, _amount);
             _depositYieldToken(mintedCollateralTokens, _creditor);
         }
     }

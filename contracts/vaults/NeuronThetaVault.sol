@@ -88,6 +88,8 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
     event AuctionStarted(GnosisAuction.AuctionDetails auctionDetails, uint256 indexed optionAuctionID);
 
+    event AuctionSetteled(uint256 indexed optionAuctionID, address indexed onToken, uint256 burnedOnTokens);
+
     event NewKeeperSet(address indexed keeper, address indexed newKeeper);
 
     event FeeRecipientSet(address indexed feeRecipient, address indexed newFeeRecipient);
@@ -437,6 +439,20 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
         optionAuctionID = VaultLifecycle.startAuction(auctionDetails);
 
         emit AuctionStarted(auctionDetails, optionAuctionID);
+    }
+
+    
+    function settleAuction() external onlyKeeper {
+        uint256 _optionAuctionID = optionAuctionID;
+        VaultLifecycle.settleAuction(GNOSIS_EASY_AUCTION, _optionAuctionID);
+        address onTokenAddress = optionState.currentOption;
+        IERC20Detailed onToken = IERC20Detailed(onTokenAddress);
+        uint256 onTokenBalance = onToken.balanceOf(address(this));
+        if (onTokenBalance > 0) {
+            VaultLifecycle.burnONtokens(GAMMA_CONTROLLER, onTokenAddress);
+        }
+
+        emit AuctionSetteled(_optionAuctionID, onTokenAddress, onTokenBalance);
     }
 
     function getCollateralAssets() external view returns (address[] memory) {

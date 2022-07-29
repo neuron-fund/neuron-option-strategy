@@ -55,7 +55,7 @@ const { parseEther } = ethers.utils
 
 moment.tz.setDefault('UTC')
 
-export const OPTION_DELAY = 0
+export const OPTION_DELAY = 900
 export const DELAY_INCREMENT = 100
 export const FEE_SCALING = BigNumber.from(10).pow(6)
 export const WEEKS_PER_YEAR = 52142857

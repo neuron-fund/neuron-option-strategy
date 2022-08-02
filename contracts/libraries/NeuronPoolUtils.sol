@@ -13,6 +13,8 @@ library NeuronPoolUtils {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
+    address constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
     /**
      * @notice Unwraps the necessary amount of the yield-bearing yearn token
      *         and transfers amount to vault
@@ -58,7 +60,7 @@ library NeuronPoolUtils {
         if (amount == 0) {
             return;
         }
-        if (asset == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+        if (asset == ETH) {
             (bool success, ) = payable(recipient).call{value: amount}("");
             require(success, "!success");
             return;

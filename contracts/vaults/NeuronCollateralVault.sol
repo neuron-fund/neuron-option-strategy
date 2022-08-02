@@ -128,13 +128,12 @@ contract NeuronCollateralVault is
 
         address zeroAddress = address(0);
         for (uint256 i = 0; i < _baseDepositTokens.length; i++) {
-            if (_baseDepositTokens[i] != zeroAddress) {
-                allowedDepositTokens[_baseDepositTokens[i]] = true;
-            }
+            require(_baseDepositTokens[i] != zeroAddress, '!_baseDepositTokens');
+            allowedDepositTokens[_baseDepositTokens[i]] = true;
         }
-        if (_vaultParams.collateralAsset != zeroAddress) {
-            allowedDepositTokens[_vaultParams.collateralAsset] = true;
-        }
+        
+        require(_vaultParams.collateralAsset != zeroAddress, '!_vaultParams.collateralAsset');
+        allowedDepositTokens[_vaultParams.collateralAsset] = true;
 
         vaultState.round = 1;
     }

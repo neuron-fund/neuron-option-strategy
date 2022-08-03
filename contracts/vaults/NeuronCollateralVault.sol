@@ -498,7 +498,7 @@ contract NeuronCollateralVault is
         require(allowedDepositTokens[_withdrawToken], "!_withdrawToken");
 
         uint256 withdrawAmount = _completeWithdraw(_withdrawToken);
-        lastQueuedWithdrawAmount = uint128(uint256(lastQueuedWithdrawAmount).sub(withdrawAmount));
+        lastQueuedWithdrawAmount = lastQueuedWithdrawAmount.sub(withdrawAmount);
     }
 
     /**

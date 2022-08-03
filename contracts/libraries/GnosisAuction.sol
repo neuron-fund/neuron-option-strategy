@@ -54,10 +54,9 @@ library GnosisAuction {
     function startAuction(AuctionDetails calldata auctionDetails) internal returns (uint256 auctionID) {
         uint256 onTokenSellAmount = getONTokenSellAmount(auctionDetails.onTokenAddress);
 
-        IERC20Detailed(auctionDetails.onTokenAddress).safeApprove(
-            auctionDetails.gnosisEasyAuction,
-            IERC20Detailed(auctionDetails.onTokenAddress).balanceOf(address(this))
-        );
+        IERC20Detailed onToken = IERC20Detailed(auctionDetails.onTokenAddress);
+        onToken.safeApprove(auctionDetails.gnosisEasyAuction, 0);
+        onToken.safeApprove(auctionDetails.gnosisEasyAuction, onToken.balanceOf(address(this)));
 
         // minBidAmount is total onTokens to sell * premium per onToken
         // shift decimals to correspond to decimals of USDC for puts
@@ -160,7 +159,7 @@ library GnosisAuction {
         IONtoken newONToken = IONtoken(onTokenAddress);
         IOptionsPremiumPricer premiumPricer = IOptionsPremiumPricer(optionsPremiumPricer);
 
-        // Apply black-scholes formula (from rvol library) to option given its features
+        // Apply black-scholes formula to option given its features
         // and get price for 100 contracts denominated in the underlying asset for call option
         // and USDC for put option
         uint256 optionPremium = premiumPricer.getPremium(
@@ -188,7 +187,7 @@ library GnosisAuction {
         IONtoken newONToken = IONtoken(onTokenAddress);
         IOptionsPremiumPricer premiumPricer = IOptionsPremiumPricer(optionsPremiumPricer);
 
-        // Apply black-scholes formula (from rvol library) to option given its features
+        // Apply black-scholes formula to option given its features
         // and get price for 100 contracts denominated in the underlying asset for call option
         // and USDC for put option
         uint256 optionPremium = premiumPricer.getPremium(

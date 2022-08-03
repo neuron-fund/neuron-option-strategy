@@ -29,14 +29,11 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      *  IMMUTABLES & CONSTANTS
      ***********************************************/
 
-    /// @notice WETH9 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-    address public immutable WETH;
-
     /// @notice USDC 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
     address public immutable USDC;
 
     /// @notice 15 minute timelock between commitAndClose and rollToNexOption.
-    uint256 public constant DELAY = 0;
+    uint256 public constant DELAY = 900;
 
     // Number of weeks per year = 52.142857 weeks * FEE_MULTIPLIER = 52142857
     // Dividing by weeks per year requires doing num.mul(FEE_MULTIPLIER).div(WEEKS_PER_YEAR)
@@ -69,15 +66,28 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
     event PerformanceFeeSet(uint256 performanceFee, uint256 newPerformanceFee);
 
     event OpenShort(
-        address indexed options,
-        uint256[] depositCollateralAmounts,
-        uint256 depositValue,
+        uint16 indexed roundNumber,
+        address indexed optionAddress,
+        uint256 optionMintedAmount,
+        address[] collateralVaults,
+        uint256[] lockedCollateralAmounts,
+        uint256 totalLockedCollateralValue,
         address indexed manager
     );
 
-    event CloseShort(address indexed options, uint256[] withdrawAmounts, address indexed manager);
+    event CloseShort(
+        uint16 indexed roundNumber,
+        address indexed optionAddress,
+        uint256[] withdrawAmounts,
+        address indexed manager
+    );
 
-    event NewOptionStrikeSelected(uint256 strikePrice, uint256 delta);
+    event NextRoundParamsSelected(
+        uint16 nextRoundNumber,
+        uint256 premiumForEachOption,
+        uint256 strikePrice,
+        uint256 delta
+    );
 
     event PremiumDiscountSet(uint256 premiumDiscount, uint256 newPremiumDiscount);
 
@@ -91,11 +101,15 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
     event AuctionStarted(GnosisAuction.AuctionDetails auctionDetails, uint256 indexed optionAuctionID);
 
+    event AuctionSetteled(uint256 indexed optionAuctionID, address indexed onToken, uint256 burnedOnTokens);
+
     event NewKeeperSet(address indexed keeper, address indexed newKeeper);
 
     event FeeRecipientSet(address indexed feeRecipient, address indexed newFeeRecipient);
 
-    event PremiumDistribute(address indexed collateralVault, uint256 amount);
+    event PremiumDistribute(uint16 indexed roundNumber, address indexed collateralVault, uint256 amount);
+
+    event PremiumForRound(uint16 indexed roundNumber, uint256 premium);
 
     /************************************************
      *  CONSTRUCTOR & INITIALIZATION
@@ -103,7 +117,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
     /**
      * @notice Initializes the contract with immutable variables
-     * @param _weth is the Wrapped Ether contract
      * @param _usdc is the USDC contract
      * @param _onTokenFactory is the contract address for minting new option protocoloption types (strikes, asset, expiry)
      * @param _gammaController is the contract address for option protocolactions
@@ -111,21 +124,18 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      * @param _gnosisEasyAuction is the contract address that facilitates gnosis auctions
      */
     constructor(
-        address _weth,
         address _usdc,
         address _onTokenFactory,
         address _gammaController,
         address _marginPool,
         address _gnosisEasyAuction
     ) {
-        require(_weth != address(0), "!_weth");
         require(_usdc != address(0), "!_usdc");
         require(_gammaController != address(0), "!_gammaController");
         require(_marginPool != address(0), "!_marginPool");
         require(_gnosisEasyAuction != address(0), "!_gnosisEasyAuction");
         require(_onTokenFactory != address(0), "!_onTokenFactory");
         ON_TOKEN_FACTORY = _onTokenFactory;
-        WETH = _weth;
         USDC = _usdc;
         GAMMA_CONTROLLER = _gammaController;
         MARGIN_POOL = _marginPool;
@@ -255,7 +265,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      * @notice Optionality to set strike price manually
      * @param strikePrice is the strike price of the new onTokens (decimals = 8)
      */
-    function setStrikePrice(uint128 strikePrice) external onlyOwner nonReentrant {
+    function setStrikePrice(uint128 strikePrice) external onlyOwner {
         require(strikePrice > 0, "!strikePrice");
         uint16 round = vaultState.round;
         emit StrikePriceSet(lastStrikeOverrideRound, round, overriddenStrikePrice, strikePrice);
@@ -307,11 +317,11 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
             collateralUpdate.newCollateralVaults = new address[](0);
             collateralUpdate.newCollateralAssets = new address[](0);
         }
-
         address oracle = IController(GAMMA_CONTROLLER).oracle();
+        uint16 currentRound = vaultState.round;
         (address onTokenAddress, uint256 premium, uint256 strikePrice, uint256 delta) = VaultLifecycle.commitAndClose(
             USDC,
-            vaultState.round,
+            currentRound,
             vaultParams,
             VaultLifecycle.CloseParams({
                 ON_TOKEN_FACTORY: ON_TOKEN_FACTORY,
@@ -329,7 +339,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
                 auctionBiddingToken
             )
         );
-        emit NewOptionStrikeSelected(strikePrice, delta);
+        emit NextRoundParamsSelected(currentRound + 1, premium, strikePrice, delta);
         ShareMath.assertUint104(premium);
 
         currentONtokenPremium = uint104(premium);
@@ -341,6 +351,8 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
         address auctionBiddingToken = auctionBiddingToken;
         uint256 premiumAmount = IERC20Detailed(auctionBiddingToken).balanceOf(address(this));
+
+        emit PremiumForRound(currentRound, premiumAmount);
 
         distributePremiums(premiumAmount, roundCollateralVaults, roundCollateralAssets);
     }
@@ -364,7 +376,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
             if (collateralVaultPremiumShare != 0) {
                 NeuronPoolUtils.transferAsset(
-                    WETH,
                     auctionBiddingToken,
                     roundCollateralVaults[i],
                     collateralVaultPremiumShare
@@ -372,14 +383,13 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
             }
             if (collateralAssetBalance != 0) {
                 NeuronPoolUtils.transferAsset(
-                    WETH,
                     roundCollateralAssets[i],
                     roundCollateralVaults[i],
                     collateralAssetBalance
                 );
             }
             INeuronCollateralVault(roundCollateralVaults[i]).commitAndClose(auctionBiddingToken);
-            emit PremiumDistribute(roundCollateralVaults[i], collateralVaultPremiumShare);
+            emit PremiumDistribute(vaultState.round, roundCollateralVaults[i], collateralVaultPremiumShare);
         }
     }
 
@@ -388,7 +398,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      */
     function _closeShort(address oldOption) private {
         uint256 lockedValue = vaultState.lockedValue;
-        if (oldOption != address(0) && vaultState.lastLockedValue == 0) {
+        if (oldOption != address(0)) {
             vaultState.lastLockedValue = uint104(lockedValue);
         }
         vaultState.lockedValue = 0;
@@ -397,7 +407,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
         if (oldOption != address(0)) {
             uint256[] memory withdrawnAmounts = VaultLifecycle.settleShort(vaultParams, GAMMA_CONTROLLER);
-            emit CloseShort(oldOption, withdrawnAmounts, msg.sender);
+            emit CloseShort(vaultState.round, oldOption, withdrawnAmounts, msg.sender);
         }
     }
 
@@ -406,7 +416,7 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
      */
     function rollToNextOption() external onlyKeeper nonReentrant {
         (address newOption, uint256[] memory lockedCollateralAmounts) = _rollToNextOption();
-        (, uint256 newVaultId) = VaultLifecycle.createShort(
+        (uint256 optionMintedAmount, uint256 newVaultId) = VaultLifecycle.createShort(
             GAMMA_CONTROLLER,
             MARGIN_POOL,
             newOption,
@@ -421,10 +431,20 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
         uint256[] memory lockedCollateralsValues = newVault.usedCollateralValues;
         uint256 totalLockedCollateralValue = uint256ArraySum(lockedCollateralsValues);
 
-        roundCollateralsValues[vaultState.round] = lockedCollateralsValues;
+        uint16 currentRound = vaultState.round;
+
+        roundCollateralsValues[currentRound] = lockedCollateralsValues;
         vaultState.lockedValue = uint104(totalLockedCollateralValue);
 
-        emit OpenShort(newOption, lockedCollateralAmounts, totalLockedCollateralValue, msg.sender);
+        emit OpenShort(
+            currentRound,
+            newOption,
+            optionMintedAmount,
+            vaultParams.collateralAssets,
+            lockedCollateralAmounts,
+            totalLockedCollateralValue,
+            msg.sender
+        );
 
         _startAuction();
     }
@@ -446,6 +466,19 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
         optionAuctionID = VaultLifecycle.startAuction(auctionDetails);
 
         emit AuctionStarted(auctionDetails, optionAuctionID);
+    }
+
+    function settleAuction() external onlyKeeper {
+        uint256 _optionAuctionID = optionAuctionID;
+        VaultLifecycle.settleAuction(GNOSIS_EASY_AUCTION, _optionAuctionID);
+        address onTokenAddress = optionState.currentOption;
+        IERC20Detailed onToken = IERC20Detailed(onTokenAddress);
+        uint256 onTokenBalance = onToken.balanceOf(address(this));
+        if (onTokenBalance > 0) {
+            VaultLifecycle.burnONtokens(GAMMA_CONTROLLER, onTokenAddress);
+        }
+
+        emit AuctionSetteled(_optionAuctionID, onTokenAddress, onTokenBalance);
     }
 
     function getCollateralAssets() external view returns (address[] memory) {

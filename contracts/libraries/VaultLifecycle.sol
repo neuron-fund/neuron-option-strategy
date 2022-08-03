@@ -3,6 +3,7 @@ pragma solidity 0.8.9;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Vault} from "./Vault.sol";
 import {ShareMath} from "./ShareMath.sol";
 import {IStrikeSelection} from "../interfaces/INeuron.sol";
@@ -10,12 +11,10 @@ import {GnosisAuction} from "./GnosisAuction.sol";
 import {IONtokenFactory, IONtoken, IController, Actions, MarginVault} from "../interfaces/GammaInterface.sol";
 import {IERC20Detailed} from "../interfaces/IERC20Detailed.sol";
 import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
-import {SupportsNonCompliantERC20} from "./SupportsNonCompliantERC20.sol";
-import {UniswapRouter} from "./UniswapRouter.sol";
 
 library VaultLifecycle {
     using SafeMath for uint256;
-    using SupportsNonCompliantERC20 for IERC20;
+    using SafeERC20 for IERC20;
 
     event BurnedOnTokens(address indexed ontokenAddress, uint256 amountBurned);
 
@@ -187,7 +186,8 @@ library VaultLifecycle {
         for (uint256 i = 0; i < collateralAssets.length; i++) {
             // double approve to fix non-compliant ERC20s
             IERC20 collateralToken = IERC20(collateralAssets[i]);
-            collateralToken.safeApproveNonCompliant(marginPool, depositAmounts[i]);
+            collateralToken.safeApprove(marginPool, 0);
+            collateralToken.safeApprove(marginPool, depositAmounts[i]);
         }
 
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](3);
@@ -420,27 +420,6 @@ library VaultLifecycle {
      */
     function settleAuction(address gnosisEasyAuction, uint256 auctionID) internal {
         IGnosisAuction(gnosisEasyAuction).settleAuction(auctionID);
-    }
-
-    /**
-     * @notice Swaps tokens using UniswapV3 router
-     * @param tokenIn is the token address to swap
-     * @param tokenIn is the token address to swap to
-     * @param minAmountOut is the minimum acceptable amount of tokenOut received from swap
-     * @param router is the contract address of UniswapV3 router
-     * @param weth is the contract address of WETH
-     */
-    function swap(
-        address tokenIn,
-        address tokenOut,
-        uint256 minAmountOut,
-        address router,
-        address weth
-    ) external {
-        uint256 balance = IERC20(tokenIn).balanceOf(address(this));
-        if (balance > 0) {
-            UniswapRouter.swap(address(this), tokenIn, tokenOut, balance, minAmountOut, router, weth);
-        }
     }
 
     /**

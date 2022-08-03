@@ -57,12 +57,11 @@ contract NeuronCollateralVault is
 
     event RoundInit(uint256 indexed round);
 
+    event CloseShort(uint16 indexed round, uint256 premium);
+
     /************************************************
      *  IMMUTABLES & CONSTANTS
      ***********************************************/
-
-    /// @notice WETH9 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-    address public immutable WETH;
 
     /// @notice USDC 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
     address public immutable USDC;
@@ -72,7 +71,7 @@ contract NeuronCollateralVault is
     uint256 private constant WEEKS_PER_YEAR = 52142857;
 
     /// @notice Token address used to identify ETH deposits in NeuronPools
-    address public constant NEURON_POOL_ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /************************************************
      *  CONSTRUCTOR & INITIALIZATION
@@ -80,14 +79,10 @@ contract NeuronCollateralVault is
 
     /**
      * @notice Initializes the contract with immutable variables
-     * @param _weth is the Wrapped Ether contract
      * @param _usdc is the USDC contract
      */
-    constructor(address _weth, address _usdc) {
-        require(_weth != address(0), "!_weth");
+    constructor(address _usdc) {
         require(_usdc != address(0), "!_usdc");
-
-        WETH = _weth;
         USDC = _usdc;
     }
 
@@ -133,9 +128,13 @@ contract NeuronCollateralVault is
         ShareMath.assertUint104(collateralAssetBalance);
         vaultState.lastLockedAmount = uint104(collateralAssetBalance);
 
+        address zeroAddress = address(0);
         for (uint256 i = 0; i < _baseDepositTokens.length; i++) {
+            require(_baseDepositTokens[i] != zeroAddress, '!_baseDepositTokens');
             allowedDepositTokens[_baseDepositTokens[i]] = true;
         }
+        
+        require(_vaultParams.collateralAsset != zeroAddress, '!_vaultParams.collateralAsset');
         allowedDepositTokens[_vaultParams.collateralAsset] = true;
 
         vaultState.round = 1;
@@ -222,7 +221,7 @@ contract NeuronCollateralVault is
         require(_amount > 0, "!amount");
         require(allowedDepositTokens[_depositToken], "!_depositToken");
 
-        if (_depositToken == NEURON_POOL_ETH) {
+        if (_depositToken == ETH) {
             require(msg.value == _amount, "deposit ETH: msg.value != _amount");
         } else {
             require(msg.value == 0, "deposit non-ETH: msg.value != 0");
@@ -247,7 +246,7 @@ contract NeuronCollateralVault is
         require(_creditor != address(0), "!creditor");
         require(allowedDepositTokens[_depositToken], "!_depositToken");
 
-        if (_depositToken == NEURON_POOL_ETH) {
+        if (_depositToken == ETH) {
             require(msg.value == _amount, "deposit ETH: msg.value != _amount");
         } else {
             require(msg.value == 0, "deposit non-ETH: msg.value != 0");
@@ -261,17 +260,20 @@ contract NeuronCollateralVault is
         address _creditor,
         address _depositToken
     ) internal {
-        if (_depositToken != NEURON_POOL_ETH) {
+        if (_depositToken != ETH) {
             IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), _amount);
         }
 
         if (_depositToken == vaultParams.collateralAsset) {
             _depositYieldToken(_amount, _creditor);
         } else {
-            if (_depositToken != NEURON_POOL_ETH) {
-                IERC20(_depositToken).safeApprove(address(collateralToken), _amount);
+            INeuronPool _collateralToken = collateralToken;
+            if (_depositToken != ETH) {
+                address collateralTokenAddress = address(_collateralToken);
+                IERC20(_depositToken).safeApprove(collateralTokenAddress, 0);
+                IERC20(_depositToken).safeApprove(collateralTokenAddress, _amount);
             }
-            uint256 mintedCollateralTokens = collateralToken.deposit{value: _amount}(_depositToken, _amount);
+            uint256 mintedCollateralTokens = _collateralToken.deposit{value: _amount}(_depositToken, _amount);
             _depositYieldToken(mintedCollateralTokens, _creditor);
         }
     }
@@ -432,6 +434,7 @@ contract NeuronCollateralVault is
      */
     function withdrawInstantly(uint256 amount, address _withdrawToken) external nonReentrant {
         require(!vaultState.isDisabled, "vault is disabled, use withdrawIfDisabled");
+        require(allowedDepositTokens[_withdrawToken], "!_withdrawToken");
 
         Vault.DepositReceipt storage depositReceipt = depositReceipts[msg.sender];
 
@@ -449,16 +452,21 @@ contract NeuronCollateralVault is
 
         emit InstantWithdraw(msg.sender, amount, currentRound);
 
-        if (_withdrawToken == address(collateralToken)) {
-            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, amount);
-        } else {
-            NeuronPoolUtils.unwrapNeuronPool(amount, _withdrawToken, address(collateralToken));
-            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, amount);
+        _transferAsset(_withdrawToken, amount);
+    }
+
+    function _transferAsset(address _withdrawToken, uint256 _amount) internal returns (uint256) {
+        address collateralTokenAddress = address(collateralToken);
+        if (_withdrawToken != collateralTokenAddress) {
+            _amount = NeuronPoolUtils.unwrapNeuronPool(_amount, _withdrawToken, collateralTokenAddress);
         }
+        NeuronPoolUtils.transferAsset(_withdrawToken, msg.sender, _amount);
+        return _amount;
     }
 
     function withdrawIfDisabled(address _withdrawToken) external nonReentrant returns (uint256) {
         require(vaultState.isDisabled, "vault is not disabled");
+        require(allowedDepositTokens[_withdrawToken], "!_withdrawToken");
 
         // We do a max redeem before initiating a withdrawal
         // But we check if they must first have unredeemed shares
@@ -479,14 +487,7 @@ contract NeuronCollateralVault is
 
         _burn(address(this), withdrawalShares);
 
-        if (_withdrawToken == address(collateralToken)) {
-            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, withdrawAmount);
-        } else {
-            NeuronPoolUtils.unwrapNeuronPool(withdrawAmount, _withdrawToken, address(collateralToken));
-            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, withdrawAmount);
-        }
-
-        return withdrawAmount;
+        return _transferAsset(_withdrawToken, withdrawAmount);
     }
 
     /**
@@ -494,8 +495,10 @@ contract NeuronCollateralVault is
      */
     function completeWithdraw(address _withdrawToken) external nonReentrant {
         require(!vaultState.isDisabled, "vault is disabled, use withdrawIfDisabled");
+        require(allowedDepositTokens[_withdrawToken], "!_withdrawToken");
+
         uint256 withdrawAmount = _completeWithdraw(_withdrawToken);
-        lastQueuedWithdrawAmount = uint128(uint256(lastQueuedWithdrawAmount).sub(withdrawAmount));
+        lastQueuedWithdrawAmount = lastQueuedWithdrawAmount.sub(withdrawAmount);
     }
 
     /**
@@ -528,14 +531,7 @@ contract NeuronCollateralVault is
 
         _burn(address(this), withdrawalShares);
 
-        if (_withdrawToken == address(collateralToken)) {
-            NeuronPoolUtils.transferAsset(WETH, address(collateralToken), msg.sender, withdrawAmount);
-        } else {
-            NeuronPoolUtils.unwrapNeuronPool(withdrawAmount, _withdrawToken, address(collateralToken));
-            NeuronPoolUtils.transferAsset(WETH, _withdrawToken, msg.sender, withdrawAmount);
-        }
-
-        return withdrawAmount;
+        return _transferAsset(_withdrawToken, withdrawAmount);
     }
 
     /*
@@ -544,7 +540,7 @@ contract NeuronCollateralVault is
      *         Having 1 initialized beforehand will not be an issue as long as we round down share calculations to 0.
      * @param numRounds is the number of rounds to initialize in the map
      */
-    function initRounds(uint256 numRounds) external nonReentrant {
+    function initRounds(uint256 numRounds) external {
         require(numRounds > 0, "!numRounds");
 
         uint256 _round = vaultState.round;
@@ -620,7 +616,7 @@ contract NeuronCollateralVault is
         _mint(address(this), mintShares);
 
         if (totalVaultFee > 0) {
-            NeuronPoolUtils.unwrapAndWithdraw(WETH, vaultParams.collateralAsset, totalVaultFee, recipient);
+            NeuronPoolUtils.unwrapAndWithdraw(vaultParams.collateralAsset, totalVaultFee, recipient);
         }
 
         return (queuedWithdrawAmount);
@@ -656,6 +652,8 @@ contract NeuronCollateralVault is
         uint256 lockedAmount = vaultState.lockedAmount;
         vaultState.lastLockedAmount = uint104(lockedAmount);
         vaultState.lockedAmount = 0;
+
+        emit CloseShort(vaultState.round, premiumBalance);
     }
 
     /************************************************

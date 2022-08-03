@@ -51,7 +51,7 @@ export async function deployNeuronCollateralVault({
   collateralVaultLifecycleLib,
   neuronPoolUtilsLib,
 }) {
-  const collateralVaultDeployArgs = [WETH, USDC]
+  const collateralVaultDeployArgs = [USDC]
   const neuronPoolDeployment = await deployments.get(neuronPoolName)
   const neuronPool = INeuronPool__factory.connect(neuronPoolDeployment.address, ownerSigner)
   await prepareNeuronPool(neuronPool)
@@ -65,7 +65,6 @@ export async function deployNeuronCollateralVault({
 
   const collateralUnwrappedAsset = await neuronPool.token()
   const neuronPoolSupportedTokens = await neuronPool.getSupportedTokens()
-  const neuronPoolBaseTokens = neuronPoolSupportedTokens.filter(x => x !== collateralUnwrappedAsset)
 
   const collateralVaultInitializeArgs = [
     owner,
@@ -76,7 +75,7 @@ export async function deployNeuronCollateralVault({
     `COLLATERAL-${tokenName}`,
     `CV${tokenSymbol}`,
     [isPut, tokenDecimals, neuronPoolAddress, underlying, minimumSupply, collateralVaultCap],
-    neuronPoolBaseTokens,
+    neuronPoolSupportedTokens,
   ]
   const collateralVault = (
     await deployProxy('NeuronCollateralVault', adminSigner, collateralVaultInitializeArgs, collateralVaultDeployArgs, {
@@ -91,7 +90,6 @@ export async function deployNeuronCollateralVault({
     collateralVault,
     collateralUnwrappedAsset,
     neuronPoolSupportedTokens,
-    neuronPoolBaseTokens,
     neuronPoolPricer,
     neuronPoolAddress,
     neuronPool,

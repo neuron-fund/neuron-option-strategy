@@ -55,7 +55,7 @@ const { parseEther } = ethers.utils
 
 moment.tz.setDefault('UTC')
 
-export const OPTION_DELAY = 0
+export const OPTION_DELAY = 900
 export const DELAY_INCREMENT = 100
 export const FEE_SCALING = BigNumber.from(10).pow(6)
 export const WEEKS_PER_YEAR = 52142857
@@ -357,7 +357,7 @@ export async function initiateVault(params: VaultTestParams) {
     [isPut, collateralAssetsAddresses, underlying, collateralVaultsAddresses],
   ]
 
-  const vaultDeployArgs = [WETH, USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION]
+  const vaultDeployArgs = [USDC, ON_TOKEN_FACTORY, GAMMA_CONTROLLER, MARGIN_POOL, GNOSIS_EASY_AUCTION]
 
   vault = (
     await deployProxy('NeuronThetaVault', adminSigner, vaultInitializeArgs, vaultDeployArgs, {

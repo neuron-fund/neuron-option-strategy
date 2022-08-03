@@ -69,20 +69,70 @@ contract OptionsPremiumPricer {
         uint256 expiryTimestamp,
         bool isPut
     ) external view returns (uint256 premium) {
+        uint256 sp = priceOracle.latestAnswer();
+        (uint256 assetPrice, uint256 assetDecimals) = isPut
+            ? (stablesOracle.latestAnswer(), stablesOracleDecimals)
+            : (sp, priceOracleDecimals);
+
+        premium = _getPremium(st, sp, expiryTimestamp, assetPrice, assetDecimals, isPut);
+    }
+
+    /**
+     * @notice Calculates the premium of the provided option using Black-Scholes in stables
+     * @param st is the strike price of the option
+     * @param expiryTimestamp is the unix timestamp of expiry
+     * @param isPut is whether the option is a put option
+     * @return premium for 100 contracts with 18 decimals
+     */
+    function getPremiumInStables(
+        uint256 st,
+        uint256 expiryTimestamp,
+        bool isPut
+    ) external view returns (uint256 premium) {
+        premium = _getPremium(
+            st,
+            priceOracle.latestAnswer(),
+            expiryTimestamp,
+            stablesOracle.latestAnswer(),
+            stablesOracleDecimals,
+            isPut
+        );
+    }
+
+    /**
+     * @notice Internal function to calculate the premium of the provided option using Black-Scholes
+     * @param st is the strike price of the option
+     * @param sp is the spot price of the underlying asset
+     * @param expiryTimestamp is the unix timestamp of expiry
+     * @param assetPrice is the denomination asset for the options
+     * @param assetDecimals is the decimals points of the denomination asset price
+     * @param isPut is whether the option is a put option
+     * @return premium for 100 contracts with 18 decimals
+     */
+    function _getPremium(
+        uint256 st,
+        uint256 sp,
+        uint256 expiryTimestamp,
+        uint256 assetPrice,
+        uint256 assetDecimals,
+        bool isPut
+    ) internal view returns (uint256 premium) {
         require(expiryTimestamp > block.timestamp, "Expiry must be in the future!");
 
-        uint256 spotPrice = priceOracle.latestAnswer();
-
-        (uint256 sp, uint256 v, uint256 t) = blackScholesParams(spotPrice, expiryTimestamp);
+        uint256 v;
+        uint256 t;
+        (sp, v, t) = blackScholesParams(sp, expiryTimestamp);
 
         (uint256 call, uint256 put) = quoteAll(t, v, sp, st);
 
         // Multiplier to convert oracle latestAnswer to 18 decimals
-        uint256 assetOracleMultiplier = 10**(uint256(18).sub(isPut ? stablesOracleDecimals : priceOracleDecimals));
-        // Make option premium denominated in the USDC
+        uint256 assetOracleMultiplier = 10**uint256(18).sub(assetDecimals);
+
+        // Make option premium denominated in the underlying
+        // asset for call vaults and USDC for put vaults
         premium = isPut
-            ? DSMath.wdiv(put, stablesOracle.latestAnswer().mul(assetOracleMultiplier))
-            : DSMath.wdiv(call, spotPrice.mul(assetOracleMultiplier));
+            ? DSMath.wdiv(put, assetPrice.mul(assetOracleMultiplier))
+            : DSMath.wdiv(call, assetPrice.mul(assetOracleMultiplier));
 
         // Convert to 18 decimals
         premium = premium.mul(assetOracleMultiplier);
@@ -93,6 +143,7 @@ contract OptionsPremiumPricer {
      * Formula reference: `d_1` in https://www.investopedia.com/terms/b/blackscholes.asp
      * http://www.optiontradingpedia.com/options_delta.htm
      * https://www.macroption.com/black-scholes-formula/
+     * @notice ONLY used when spot oracle is denominated in USDC
      * @param st is the strike price of the option
      * @param expiryTimestamp is the unix timestamp of expiry
      * @return delta for given option. 4 decimals (ex: 8100 = 0.81 delta) as this is what strike selection
@@ -102,20 +153,9 @@ contract OptionsPremiumPricer {
         require(expiryTimestamp > block.timestamp, "Expiry must be in the future!");
 
         uint256 spotPrice = priceOracle.latestAnswer();
-        (uint256 sp, uint256 v, uint256 t) = blackScholesParams(spotPrice, expiryTimestamp);
+        (uint256 sp, uint256 v, ) = blackScholesParams(spotPrice, expiryTimestamp);
 
-        uint256 d1;
-        uint256 d2;
-
-        // Divide delta by 10 ** 10 to bring it to 4 decimals for strike selection
-        if (sp >= st) {
-            (d1, d2) = derivatives(t, v, sp, st);
-            delta = Math.ncdf((Math.FIXED_1 * d1) / 1e18).div(10**10);
-        } else {
-            // If underlying < strike price notice we switch st <-> sp passed into d
-            (d1, d2) = derivatives(t, v, st, sp);
-            delta = uint256(10).mul(10**13).sub(Math.ncdf((Math.FIXED_1 * d2) / 1e18)).div(10**10);
-        }
+        delta = _getOptionDelta(sp, st, v, expiryTimestamp);
     }
 
     /**
@@ -138,6 +178,22 @@ contract OptionsPremiumPricer {
     ) external view returns (uint256 delta) {
         require(expiryTimestamp > block.timestamp, "Expiry must be in the future!");
 
+        delta = _getOptionDelta(sp, st, v, expiryTimestamp);
+    }
+
+    /**
+     * @notice Internal function to calculate the option's delta
+     * @param st is the strike price of the option
+     * @param expiryTimestamp is the unix timestamp of expiry
+     * @return delta for given option. 4 decimals (ex: 8100 = 0.81 delta) as this is what strike selection
+     * module recognizes
+     */
+    function _getOptionDelta(
+        uint256 sp,
+        uint256 st,
+        uint256 v,
+        uint256 expiryTimestamp
+    ) internal view returns (uint256 delta) {
         // days until expiry
         uint256 t = expiryTimestamp.sub(block.timestamp).div(1 days);
 
@@ -169,7 +225,7 @@ contract OptionsPremiumPricer {
         uint256 v,
         uint256 sp,
         uint256 st
-    ) private view returns (uint256 call, uint256 put) {
+    ) private pure returns (uint256 call, uint256 put) {
         uint256 _c;
         uint256 _p;
 
@@ -199,7 +255,7 @@ contract OptionsPremiumPricer {
         uint256 v,
         uint256 sp,
         uint256 st
-    ) private view returns (uint256 premium) {
+    ) private pure returns (uint256 premium) {
         (uint256 d1, uint256 d2) = derivatives(t, v, sp, st);
 
         uint256 cdfD1 = Math.ncdf((Math.FIXED_1 * d1) / 1e18);
@@ -222,7 +278,7 @@ contract OptionsPremiumPricer {
         uint256 v,
         uint256 sp,
         uint256 st
-    ) internal view returns (uint256 d1, uint256 d2) {
+    ) internal pure returns (uint256 d1, uint256 d2) {
         require(sp > 0, "!sp");
         require(st > 0, "!st");
 

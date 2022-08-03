@@ -351,7 +351,6 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
 
         address auctionBiddingToken = auctionBiddingToken;
         uint256 premiumAmount = IERC20Detailed(auctionBiddingToken).balanceOf(address(this));
-        console.log("commitAndClose ~ premiumAmount", premiumAmount);
 
         emit PremiumForRound(currentRound, premiumAmount);
 

@@ -57,6 +57,8 @@ contract NeuronCollateralVault is
 
     event RoundInit(uint256 indexed round);
 
+    event CloseShort(uint16 indexed round, uint256 premium);
+
     /************************************************
      *  IMMUTABLES & CONSTANTS
      ***********************************************/
@@ -650,6 +652,8 @@ contract NeuronCollateralVault is
         uint256 lockedAmount = vaultState.lockedAmount;
         vaultState.lastLockedAmount = uint104(lockedAmount);
         vaultState.lockedAmount = 0;
+
+        emit CloseShort(vaultState.round, premiumBalance);
     }
 
     /************************************************

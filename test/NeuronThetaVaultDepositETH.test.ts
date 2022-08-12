@@ -72,15 +72,6 @@ runVaultTests('#depositETH', async function (params) {
       ).to.be.revertedWith('deposit ETH: msg.value != _amount')
     })
 
-    it('reverts when value does not meet amount', async function () {
-      const collateralVault = collateralVaults[0]
-      await expect(
-        collateralVault.connect(userSigner).deposit(parseEther('1'), NEURON_POOL_ETH, {
-          value: parseEther('0.5'),
-        })
-      ).to.be.revertedWith('deposit ETH: msg.value != _amount')
-    })
-
     it('reverts when passing value with non eth deposit token', async function () {
       const collateralVault = collateralVaults[0]
       await expect(

@@ -130,11 +130,11 @@ contract NeuronCollateralVault is
 
         address zeroAddress = address(0);
         for (uint256 i = 0; i < _baseDepositTokens.length; i++) {
-            require(_baseDepositTokens[i] != zeroAddress, '!_baseDepositTokens');
+            require(_baseDepositTokens[i] != zeroAddress, "!_baseDepositTokens");
             allowedDepositTokens[_baseDepositTokens[i]] = true;
         }
-        
-        require(_vaultParams.collateralAsset != zeroAddress, '!_vaultParams.collateralAsset');
+
+        require(_vaultParams.collateralAsset != zeroAddress, "!_vaultParams.collateralAsset");
         allowedDepositTokens[_vaultParams.collateralAsset] = true;
 
         vaultState.round = 1;
@@ -217,16 +217,6 @@ contract NeuronCollateralVault is
      * @param _amount is the amount of `asset` to deposit
      */
     function deposit(uint256 _amount, address _depositToken) external payable nonReentrant {
-        require(!vaultState.isDisabled, "vault is disabled");
-        require(_amount > 0, "!amount");
-        require(allowedDepositTokens[_depositToken], "!_depositToken");
-
-        if (_depositToken == ETH) {
-            require(msg.value == _amount, "deposit ETH: msg.value != _amount");
-        } else {
-            require(msg.value == 0, "deposit non-ETH: msg.value != 0");
-        }
-
         _depositWithToken(_amount, msg.sender, _depositToken);
     }
 
@@ -241,16 +231,7 @@ contract NeuronCollateralVault is
         address _creditor,
         address _depositToken
     ) external payable nonReentrant {
-        require(!vaultState.isDisabled, "vault is disabled");
-        require(_amount > 0, "!amount");
         require(_creditor != address(0), "!creditor");
-        require(allowedDepositTokens[_depositToken], "!_depositToken");
-
-        if (_depositToken == ETH) {
-            require(msg.value == _amount, "deposit ETH: msg.value != _amount");
-        } else {
-            require(msg.value == 0, "deposit non-ETH: msg.value != 0");
-        }
 
         _depositWithToken(_amount, _creditor, _depositToken);
     }
@@ -260,6 +241,16 @@ contract NeuronCollateralVault is
         address _creditor,
         address _depositToken
     ) internal {
+        require(!vaultState.isDisabled, "vault is disabled");
+        require(_amount > 0, "!amount");
+        require(allowedDepositTokens[_depositToken], "!_depositToken");
+
+        if (_depositToken == ETH) {
+            require(msg.value == _amount, "deposit ETH: msg.value != _amount");
+        } else {
+            require(msg.value == 0, "deposit non-ETH: msg.value != 0");
+        }
+
         if (_depositToken != ETH) {
             IERC20(_depositToken).safeTransferFrom(msg.sender, address(this), _amount);
         }

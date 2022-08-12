@@ -15,7 +15,7 @@ import {IGnosisAuction} from "../interfaces/IGnosisAuction.sol";
 library VaultLifecycle {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-    
+
     event BurnedOnTokens(address indexed ontokenAddress, uint256 amountBurned);
 
     struct CloseParams {

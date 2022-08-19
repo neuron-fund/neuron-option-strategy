@@ -44,6 +44,10 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
+      forking: {
+        url: process.env.RPC_URL,
+        blockNumber: Number(process.env.FORK_BLOCK_NUMBER) || undefined,
+      },
       accounts: {
         mnemonic: process.env.TEST_MNEMONIC,
       },
@@ -102,8 +106,8 @@ const config: HardhatUserConfig = {
   },
   external: {
     deployments: {
-      hardhat: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH'), getDeploymentsDirFromEnv('NEURON_CONTRACTS_PATH')],
-      localhost: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH'), getDeploymentsDirFromEnv('NEURON_CONTRACTS_PATH')],
+      hardhat: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH')],
+      localhost: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH')],
     },
   },
 }

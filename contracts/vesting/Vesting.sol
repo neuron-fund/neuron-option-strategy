@@ -42,6 +42,7 @@ contract Vesting is Initializable {
         uint256 currentTime = block.timestamp;
 
         token = IERC20(_tokenAddress);
+        require(token.balanceOf(address(this)) == _amount, "Wrong token balance");
 
         recipient = _recipient;
 
@@ -55,7 +56,6 @@ contract Vesting is Initializable {
 
     function unlockedAmount() public view returns (uint256) {
         uint256 currentTime = block.timestamp;
-        console.log("unlockedAmount ~ currentTime", currentTime);
 
         if (currentTime <= unlockStartTime) {
             return 0;
@@ -77,14 +77,11 @@ contract Vesting is Initializable {
     }
 
     function claim(address _beneficiary, uint256 _amount) public {
-        console.log("claim timestamp", block.timestamp);
         require(msg.sender == recipient, "Only the recipient can claim");
         require(_amount > 0, "Amount must be greater than zero");
         require(_beneficiary != address(0), "Beneficiary cannot be zero address");
 
         uint256 _unclaimed = unclaimed();
-        console.log("claim ~ _unclaimed", _unclaimed);
-        console.log("claim ~ _amount", _amount);
 
         require(_amount <= _unclaimed, "Amount must be less than or equal to unclaimed amount");
 

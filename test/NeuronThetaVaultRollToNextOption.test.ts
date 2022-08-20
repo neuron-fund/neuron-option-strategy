@@ -80,7 +80,7 @@ runVaultTests('#rollToNextOption', async function (params) {
 
       await expect(res)
         .to.emit(vault, 'OpenShort')
-        .withArgs(defaultONtokenAddress, depositedCollateralsAmounts, anyValue, keeper)
+        .withArgs(anyValue, defaultONtokenAddress, anyValue, anyValue, depositedCollateralsAmounts, anyValue, keeper)
 
       const vaultState = await collateralVault.vaultState()
 
@@ -165,7 +165,7 @@ runVaultTests('#rollToNextOption', async function (params) {
 
       await expect(firstTx)
         .to.emit(vault, 'OpenShort')
-        .withArgs(firstOptionAddress, depositedCollateralsAmounts, anyValue, keeper)
+        .withArgs(anyValue, firstOptionAddress, anyValue, anyValue, depositedCollateralsAmounts, anyValue, keeper)
 
       // 100% of the vault's balance is allocated to short
       assert.bnEqual(await neuronPool.balanceOf(collateralVault.address), BigNumber.from(0))
@@ -187,7 +187,7 @@ runVaultTests('#rollToNextOption', async function (params) {
 
       await expect(firstTx)
         .to.emit(vault, 'OpenShort')
-        .withArgs(firstOptionAddress, depositedCollateralsAmounts, anyValue, keeper)
+        .withArgs(anyValue, firstOptionAddress, anyValue, anyValue, depositedCollateralsAmounts, anyValue, keeper)
 
       await time.increaseTo((await ethers.provider.getBlock('latest')).timestamp + auctionDuration)
 
@@ -219,7 +219,7 @@ runVaultTests('#rollToNextOption', async function (params) {
 
       await expect(firstCloseTx)
         .to.emit(vault, 'CloseShort')
-        .withArgs(firstOptionAddress, afterCollateralAmounts, owner)
+        .withArgs(anyValue, firstOptionAddress, afterCollateralAmounts, owner)
 
       await time.increaseTo((await vault.nextOptionReadyAt()).toNumber() + 1)
 
@@ -234,7 +234,15 @@ runVaultTests('#rollToNextOption', async function (params) {
       assert.bnEqual(await getCurrentOptionExpiry(), BigNumber.from(secondOption.expiry))
       await expect(secondTx)
         .to.emit(vault, 'OpenShort')
-        .withArgs(secondOptionAddress, secondDepositedCollateralsAmounts, anyValue, keeper)
+        .withArgs(
+          anyValue,
+          secondOptionAddress,
+          anyValue,
+          anyValue,
+          secondDepositedCollateralsAmounts,
+          anyValue,
+          keeper
+        )
 
       assert.bnEqual(await neuronPool.balanceOf(collateralVault.address), BigNumber.from(0))
     })
@@ -250,7 +258,7 @@ runVaultTests('#rollToNextOption', async function (params) {
 
       await expect(firstTx)
         .to.emit(vault, 'OpenShort')
-        .withArgs(firstOptionAddress, depositedCollateralsAmounts, anyValue, keeper)
+        .withArgs(anyValue, firstOptionAddress, anyValue, anyValue, depositedCollateralsAmounts, anyValue, keeper)
 
       let bidMultiplier = 1
 
@@ -309,7 +317,7 @@ runVaultTests('#rollToNextOption', async function (params) {
 
       await expect(firstCloseTx)
         .to.emit(vault, 'CloseShort')
-        .withArgs(firstOptionAddress, afterCollateralAmounts, owner)
+        .withArgs(anyValue, firstOptionAddress, afterCollateralAmounts, owner)
 
       // Time increase to after next option available
       await time.increaseTo((await vault.nextOptionReadyAt()).toNumber() + 1)
@@ -355,7 +363,15 @@ runVaultTests('#rollToNextOption', async function (params) {
 
       await expect(secondTx)
         .to.emit(vault, 'OpenShort')
-        .withArgs(secondOptionAddress, secondShortDepositedCollateralsAmounts, anyValue, keeper)
+        .withArgs(
+          anyValue,
+          secondOptionAddress,
+          anyValue,
+          anyValue,
+          secondShortDepositedCollateralsAmounts,
+          anyValue,
+          keeper
+        )
 
       assert.bnEqual(await neuronPool.balanceOf(collateralVault.address), BigNumber.from(0))
     })

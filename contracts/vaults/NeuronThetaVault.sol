@@ -317,20 +317,27 @@ contract NeuronThetaVault is ReentrancyGuardUpgradeable, OwnableUpgradeable, Neu
             collateralUpdate.newCollateralVaults = new address[](0);
             collateralUpdate.newCollateralAssets = new address[](0);
         }
+        uint256[] memory nextRoundcollateralCaps = new uint256[](vaultParams.collateralVaults.length);
+        for (uint256 i = 0; i < vaultParams.collateralVaults.length; i++) {
+            (, , , , , nextRoundcollateralCaps[i]) = INeuronCollateralVault(vaultParams.collateralVaults[i])
+                .vaultParams();
+        }
+        VaultLifecycle.CloseParams memory closeParams = VaultLifecycle.CloseParams({
+            ON_TOKEN_FACTORY: ON_TOKEN_FACTORY,
+            USDC: USDC,
+            currentOption: oldOption,
+            delay: DELAY,
+            lastStrikeOverrideRound: lastStrikeOverrideRound,
+            overriddenStrikePrice: overriddenStrikePrice,
+            collateralConstraints: nextRoundcollateralCaps
+        });
         address oracle = IController(GAMMA_CONTROLLER).oracle();
         uint16 currentRound = vaultState.round;
         (address onTokenAddress, uint256 premium, uint256 strikePrice, uint256 delta) = VaultLifecycle.commitAndClose(
             USDC,
             currentRound,
             vaultParams,
-            VaultLifecycle.CloseParams({
-                ON_TOKEN_FACTORY: ON_TOKEN_FACTORY,
-                USDC: USDC,
-                currentOption: oldOption,
-                delay: DELAY,
-                lastStrikeOverrideRound: lastStrikeOverrideRound,
-                overriddenStrikePrice: overriddenStrikePrice
-            }),
+            closeParams,
             VaultLifecycle.ClosePremiumParams(
                 oracle,
                 strikeSelection,

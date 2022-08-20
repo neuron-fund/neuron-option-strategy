@@ -354,7 +354,6 @@ interface Actions {
         address[] assets;
         uint256 vaultId;
         uint256[] amounts;
-        bytes data;
     }
 }
 

@@ -36,13 +36,13 @@ abstract contract VolOracle {
     }
 
     /// @dev Stores the latest data that helps us compute the standard deviation of the seen dataset.
-    mapping(address => Accumulator) public accumulators;
+    mapping(bytes32 => Accumulator) public accumulators;
 
-    /// @dev Stores the last oracle TWAP price for a pool
-    mapping(address => uint256) public lastPrices;
+    /// @dev Stores the last oracle TWAP price for a optionId
+    mapping(bytes32 => uint256) public lastPrices;
 
     // @dev Stores log-return observations over window
-    mapping(address => int256[]) public observations;
+    mapping(bytes32 => int256[]) public observations;
 
     /***
      * Events
@@ -51,7 +51,7 @@ abstract contract VolOracle {
     event Commit(uint32 commitTimestamp, int96 mean, uint120 dsq, uint256 newValue, address committer);
 
     /**
-     * @notice Creates an volatility oracle for a pool
+     * @notice Creates an volatility oracle for a optionId
      * @param _period is how often the oracle needs to be updated
      * @param _windowInDays is how many days the window should be
      */
@@ -70,25 +70,25 @@ abstract contract VolOracle {
     }
 
     /**
-     * @notice Initialized pool or chainlink feed observation window
+     * @notice Initialized optionId or chainlink feed observation window
      */
-    function initPool(address pool) external {
-        require(observations[pool].length == 0, "Pool initialized");
-        observations[pool] = new int256[](windowSize);
+    function initOptionId(bytes32 optionId) external {
+        require(observations[optionId].length == 0, "optionId initialized");
+        observations[optionId] = new int256[](windowSize);
     }
 
     /**
      * @notice Commits an oracle update.
-     * Must be called after pool or chainlink feed initialized
+     * Must be called after optionId or chainlink feed initialized
      */
-    function commit(address pool) external {
-        require(observations[pool].length > 0, "!pool initialize");
+    function commit(bytes32 optionId) external {
+        require(observations[optionId].length > 0, "!optionId initialize");
 
         (uint32 commitTimestamp, uint32 gapFromPeriod) = secondsFromPeriod();
         require(gapFromPeriod < commitPhaseDuration, "Not commit phase");
 
-        uint256 price = getPrice(pool);
-        uint256 _lastPrice = lastPrices[pool];
+        uint256 price = getPrice(optionId);
+        uint256 _lastPrice = lastPrices[optionId];
         uint256 periodReturn = _lastPrice > 0 ? DSMath.wdiv(price, _lastPrice) : 0;
 
         require(price > 0, "Price from oracle is 0");
@@ -97,15 +97,15 @@ abstract contract VolOracle {
         // we need to scale it down to 10**8
         int256 logReturn = periodReturn > 0 ? PRBMathSD59x18.ln(int256(periodReturn)) / 10**10 : 0;
 
-        Accumulator storage accum = accumulators[pool];
+        Accumulator storage accum = accumulators[optionId];
 
         require(block.timestamp >= accum.lastTimestamp + period - commitPhaseDuration, "Committed");
 
         uint256 currentObservationIndex = accum.currentObservationIndex;
 
         (int256 newMean, int256 newDSQ) = Welford.update(
-            observationCount(pool, true),
-            observations[pool][currentObservationIndex],
+            observationCount(optionId, true),
+            observations[optionId][currentObservationIndex],
             logReturn,
             accum.mean,
             accum.dsq
@@ -117,9 +117,9 @@ abstract contract VolOracle {
         accum.mean = int96(newMean);
         accum.dsq = uint120(newDSQ);
         accum.lastTimestamp = commitTimestamp;
-        observations[pool][currentObservationIndex] = logReturn;
+        observations[optionId][currentObservationIndex] = logReturn;
         accum.currentObservationIndex = uint8((currentObservationIndex + 1) % windowSize);
-        lastPrices[pool] = price;
+        lastPrices[optionId] = price;
 
         emit Commit(uint32(commitTimestamp), int96(newMean), uint120(newDSQ), price, msg.sender);
     }
@@ -128,16 +128,32 @@ abstract contract VolOracle {
      * @notice Returns the standard deviation of the base currency in 10**8 i.e. 1*10**8 = 100%
      * @return standardDeviation is the standard deviation of the asset
      */
-    function vol(address pool) public view returns (uint256 standardDeviation) {
-        return Welford.stdev(observationCount(pool, false), accumulators[pool].dsq);
+    function vol(bytes32 optionId) public view returns (uint256 standardDeviation) {
+        return Welford.stdev(observationCount(optionId, false), accumulators[optionId].dsq);
+    }
+
+    /**
+     * @notice Computes the option id for a given Option struct
+     * @param delta is the option's delta, in units of 10**4. E.g. 0.1d = 0.1 * 10**4
+     * @param underlying is the underlying of the option
+     * @param collateralAsset is the collateral used to collateralize the option
+     * @param isPut is the flag used to determine if an option is a put or call
+     */
+    function getOptionId(
+        uint256 delta,
+        address underlying,
+        address collateralAsset,
+        bool isPut
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(delta, underlying, collateralAsset, isPut));
     }
 
     /**
      * @notice Returns the annualized standard deviation of the base currency in 10**8 i.e. 1*10**8 = 100%
      * @return annualStdev is the annualized standard deviation of the asset
      */
-    function annualizedVol(address pool) public view returns (uint256 annualStdev) {
-        return Welford.stdev(observationCount(pool, false), accumulators[pool].dsq).mul(annualizationConstant);
+    function annualizedVol(bytes32 optionId) public view returns (uint256 annualStdev) {
+        return Welford.stdev(observationCount(optionId, false), accumulators[optionId].dsq).mul(annualizationConstant);
     }
 
     /**
@@ -156,17 +172,17 @@ abstract contract VolOracle {
 
     /**
      * @notice Returns the current number of observations [0, windowSize]
-     * @param pool is the address of the pool we want to count observations for
+     * @param optionId is the address of the optionId we want to count observations for
      * @param isInc is whether we want to add 1 to the number of
      * observations for mean purposes
      * @return obvCount is the observation count
      */
-    function observationCount(address pool, bool isInc) internal view returns (uint256 obvCount) {
+    function observationCount(bytes32 optionId, bool isInc) internal view returns (uint256 obvCount) {
         uint256 size = windowSize; // cache for gas
-        obvCount = observations[pool][size - 1] != 0
+        obvCount = observations[optionId][size - 1] != 0
             ? size
-            : accumulators[pool].currentObservationIndex + (isInc ? 1 : 0);
+            : accumulators[optionId].currentObservationIndex + (isInc ? 1 : 0);
     }
 
-    function getPrice(address pool) public view virtual returns (uint256);
+    function getPrice(bytes32 optionId) public view virtual returns (uint256);
 }

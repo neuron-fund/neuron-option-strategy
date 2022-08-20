@@ -15,13 +15,11 @@ import {
   deployProxy,
   setupOracle,
   whitelistProduct,
-  setAssetPricer,
   convertPriceAmount,
   setOracleExpiryPriceNeuron,
   getOracle,
 } from '../helpers/utils'
-import { prepareNeuronPool } from '../helpers/neuronPool'
-import { UNIV3_ETH_USDC_POOL, UNIV3_WBTC_USDC_POOL, USDC, WETH } from '../constants/externalAddresses'
+import { USDC, WETH } from '../constants/externalAddresses'
 import {
   CollateralVaultLifecycle,
   IERC20Detailed,
@@ -38,13 +36,12 @@ import {
   IONtoken__factory,
   IONtokenFactory__factory,
   IGnosisAuction__factory,
-  INeuronPool__factory,
-  INeuronPoolPricer__factory,
   IWETH__factory,
   TestVolOracle__factory,
   OptionsPremiumPricer__factory,
   DeltaStrikeSelection,
   DeltaStrikeSelection__factory,
+  TestVolOracle,
 } from '../typechain-types'
 import { Contract } from '@ethersproject/contracts'
 import * as time from './time'
@@ -154,7 +151,7 @@ export async function initiateVault(params: VaultTestParams) {
 
   // Contracts
   let strikeSelection: DeltaStrikeSelection
-  let volOracle: Contract
+  let volOracle: TestVolOracle
   let optionsPremiumPricer: Contract
   let gnosisAuction: IGnosisAuction
   let vaultLifecycleLib: VaultLifecycle
@@ -182,6 +179,7 @@ export async function initiateVault(params: VaultTestParams) {
   let firstOptionExpiry: number
   let secondOptionStrike: BigNumber
   let secondOptionExpiry: number
+  let optionId: string
 
   let firstOption: Option
   let secondOption: Option
@@ -263,7 +261,7 @@ export async function initiateVault(params: VaultTestParams) {
       await volOracle.setPrice(values[i])
       const topOfPeriod = await getTopOfPeriod()
       await time.increaseTo(topOfPeriod)
-      await volOracle.mockCommit(asset === WETH ? UNIV3_ETH_USDC_POOL : UNIV3_WBTC_USDC_POOL)
+      await volOracle.mockCommit(optionId)
     }
   }
 
@@ -271,7 +269,11 @@ export async function initiateVault(params: VaultTestParams) {
 
   volOracle = await TestVolOracleFactory.deploy(PERIOD, 7)
 
-  await volOracle.initPool(underlying === WETH ? UNIV3_ETH_USDC_POOL : UNIV3_WBTC_USDC_POOL)
+  const optionIdParams = [params.deltaFirstOption, params.underlying, USDC, params.isPut] as const
+
+  optionId = await volOracle.getOptionId(...optionIdParams)
+
+  await volOracle.initOptionId(optionId)
 
   const OptionsPremiumPricer = (await getContractFactory(
     'OptionsPremiumPricer',
@@ -284,7 +286,7 @@ export async function initiateVault(params: VaultTestParams) {
   )) as DeltaStrikeSelection__factory
 
   optionsPremiumPricer = await OptionsPremiumPricer.deploy(
-    params.underlying === WETH ? UNIV3_ETH_USDC_POOL : UNIV3_WBTC_USDC_POOL,
+    optionId,
     volOracle.address,
     params.underlying === WETH ? ETH_PRICE_ORACLE : BTC_PRICE_ORACLE,
     USDC_PRICE_ORACLE
@@ -405,11 +407,13 @@ export async function initiateVault(params: VaultTestParams) {
     )
   }
 
+  const collateralConstraints = collateralVaults.map(vault => params.collateralVaultCap)
+
   const firstOptionAddress = await onTokenFactory.getTargetONtokenAddress(
     params.underlying,
     params.strikeAsset,
     collateralAssetsAddresses,
-    collateralAssetsAddresses.map(() => 0),
+    collateralConstraints,
     firstOptionStrike,
     firstOptionExpiry,
     params.isPut
@@ -444,7 +448,7 @@ export async function initiateVault(params: VaultTestParams) {
     params.underlying,
     params.strikeAsset,
     collateralAssetsAddresses,
-    collateralAssetsAddresses.map(x => 0),
+    collateralConstraints,
     secondOptionStrike,
     secondOptionExpiry,
     params.isPut

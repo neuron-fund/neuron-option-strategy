@@ -106,8 +106,8 @@ const config: HardhatUserConfig = {
   },
   external: {
     deployments: {
-      hardhat: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH')],
-      localhost: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH')],
+      hardhat: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH'), getDeploymentsDirFromEnv('NEURON_CONTRACTS_PATH')],
+      localhost: [getDeploymentsDirFromEnv('NEURON_OPTIONS_PATH'), getDeploymentsDirFromEnv('NEURON_CONTRACTS_PATH')],
     },
   },
 }

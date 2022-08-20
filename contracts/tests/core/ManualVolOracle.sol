@@ -2,7 +2,7 @@
 pragma experimental ABIEncoderV2;
 pragma solidity 0.8.9;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract ManualVolOracle is AccessControl {
     /// @dev The identifier of the role which maintains other roles.

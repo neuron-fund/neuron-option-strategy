@@ -25,6 +25,7 @@ library VaultLifecycle {
         uint256 delay;
         uint16 lastStrikeOverrideRound;
         uint256 overriddenStrikePrice;
+        uint256[] collateralConstraints;
     }
 
     struct ClosePremiumParams {
@@ -201,8 +202,7 @@ library VaultLifecycle {
             secondAddress: onTokenAddress, // optionToken
             assets: new address[](0), // not used
             vaultId: newVaultID, // vaultId
-            amounts: new uint256[](0), // not used
-            data: "" // not used
+            amounts: new uint256[](0) // not used
         });
 
         actions[1] = Actions.ActionArgs({
@@ -211,8 +211,7 @@ library VaultLifecycle {
             secondAddress: address(this), // address to transfer from
             assets: new address[](0), // not used
             vaultId: newVaultID, // vaultId
-            amounts: depositAmounts, // amounts
-            data: "" //data
+            amounts: depositAmounts // amounts
         });
 
         actions[2] = Actions.ActionArgs({
@@ -221,8 +220,7 @@ library VaultLifecycle {
             secondAddress: address(this), // address to transfer to
             assets: new address[](0), // not used
             vaultId: newVaultID, // vaultId
-            amounts: mintAmount, // amount
-            data: "" //data
+            amounts: mintAmount // amount
         });
         controller.operate(actions);
 
@@ -265,8 +263,7 @@ library VaultLifecycle {
             address(this), // address to transfer to
             new address[](0), // not used
             vaultID, // vaultId
-            new uint256[](0), // not used
-            "" // not used
+            new uint256[](0) // not used
         );
 
         controller.operate(actions);
@@ -312,8 +309,7 @@ library VaultLifecycle {
             secondAddress: address(0), // not used
             assets: shortONtokenAddressActionArg, // short to burn
             vaultId: vaultID,
-            amounts: burnAmountActionArg, // burn amount
-            data: ""
+            amounts: burnAmountActionArg // burn amount
         });
 
         actions[1] = Actions.ActionArgs({
@@ -322,8 +318,7 @@ library VaultLifecycle {
             secondAddress: address(this), // withdraw to
             assets: new address[](0), // not used
             vaultId: vaultID,
-            amounts: new uint256[](1), // array with one zero element to withdraw all available
-            data: ""
+            amounts: new uint256[](1) // array with one zero element to withdraw all available
         });
 
         controller.operate(actions);
@@ -372,14 +367,12 @@ library VaultLifecycle {
     ) internal returns (address) {
         IONtokenFactory factory = IONtokenFactory(closeParams.ON_TOKEN_FACTORY);
 
-        uint256[] memory collateralConstraints = new uint256[](collateralAssets.length);
-
         {
             address onTokenFromFactory = factory.getONtoken(
                 underlying,
                 closeParams.USDC,
                 collateralAssets,
-                collateralConstraints,
+                closeParams.collateralConstraints,
                 strikePrice,
                 expiry,
                 isPut
@@ -393,7 +386,7 @@ library VaultLifecycle {
             underlying,
             closeParams.USDC,
             collateralAssets,
-            collateralConstraints,
+            closeParams.collateralConstraints,
             strikePrice,
             expiry,
             isPut

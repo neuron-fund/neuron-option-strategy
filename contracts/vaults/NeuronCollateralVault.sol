@@ -264,7 +264,7 @@ contract NeuronCollateralVault is
                 IERC20(_depositToken).safeApprove(collateralTokenAddress, 0);
                 IERC20(_depositToken).safeApprove(collateralTokenAddress, _amount);
             }
-            uint256 mintedCollateralTokens = _collateralToken.deposit{value: _amount}(_depositToken, _amount);
+            uint256 mintedCollateralTokens = _collateralToken.deposit{value: msg.value}(_depositToken, _amount);
             _depositYieldToken(mintedCollateralTokens, _creditor);
         }
     }
